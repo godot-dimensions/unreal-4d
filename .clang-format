@@ -1,0 +1,35 @@
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AlignEscapedNewlines: Left
+AlignOperands: DontAlign
+AlignTrailingComments:
+  Kind: Never
+  OverEmptyLines: 0
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Attach
+BreakConstructorInitializers: AfterColon
+ColumnLimit: 0
+ConstructorInitializerIndentWidth: 8
+ContinuationIndentWidth: 8
+Cpp11BracedListStyle: false
+IndentCaseLabels: true
+IndentWidth: 4
+InsertBraces: true
+InsertNewlineAtEOF: true
+InsertTrailingCommas: Wrapped
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+  AtStartOfFile: false
+PackConstructorInitializers: NextLine
+PointerAlignment: Left
+RemoveSemicolon: true
+ReflowComments: Never
+SpaceAfterCStyleCast: false
+SpacesInLineCommentPrefix:
+  Minimum: 0 # We want a minimum of 1 for comments, but allow 0 for disabled code.
+  Maximum: -1
+Standard: c++20
+TabWidth: 4
+UseTab: Always
