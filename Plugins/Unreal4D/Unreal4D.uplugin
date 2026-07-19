@@ -1,0 +1,43 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Unreal 4D",
+	"Description": "Four-dimensional math, geometry, physics, rendering, and editor tooling for Unreal Engine.",
+	"Category": "Other",
+	"CreatedBy": "Input Output Group (IOG)",
+	"CreatedByURL": "https://www.iog.io/",
+	"DocsURL": "https://github.com/godot-dimensions/unreal-4d",
+	"SupportURL": "https://github.com/godot-dimensions/unreal-4d/issues",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "Unreal4DRendering",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit"
+		},
+		{
+			"Name": "Unreal4DCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "Unreal4DEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "EnhancedInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GizmoEdMode",
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
+		}
+	]
+}
