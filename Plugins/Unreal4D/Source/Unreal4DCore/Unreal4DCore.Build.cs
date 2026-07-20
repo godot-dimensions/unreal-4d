@@ -19,12 +19,10 @@ public class Unreal4DCore : ModuleRules
 			"InputCore",
 			"Json",
 			"PhysicsCore",
+			"RenderCore",
+			"RHI",
 			"UMG",
-		});
-
-		PrivateDependencyModuleNames.AddRange(new string[]
-		{
-			"Unreal4DRendering"
+			"Unreal4DRendering",
 		});
 	}
 }

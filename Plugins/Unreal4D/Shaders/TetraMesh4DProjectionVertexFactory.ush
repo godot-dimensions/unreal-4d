@@ -1,0 +1,436 @@
+/*
+ * Shader implementation for FTetraMesh4DProjectionVertexFactory.
+ *
+ * This vertex factory renders projected 4D mesh surfaces through the regular
+ * Unreal material pipeline. Each input vertex is transformed into 4D camera
+ * space, projected to 3D by dropping W, and then converted to the translated
+ * world space expected by the material pipeline.
+ */
+
+#include "/Engine/Private/VertexFactoryCommon.ush"
+#include "/Engine/Private/LocalVertexFactoryCommon.ush"
+#include "/Engine/Private/LightmapData.ush"
+
+#ifndef MANUAL_VERTEX_FETCH
+#define MANUAL_VERTEX_FETCH 0
+#endif
+
+#define VF_REQUIRES_HITPROXY_INDIRECTION 1
+
+struct FVertexFactoryInput
+{
+	float4 Position4D : ATTRIBUTE0;
+};
+
+struct FVertexFactoryIntermediatesCommon
+{
+	FSceneDataIntermediates SceneData;
+};
+
+struct FVertexFactoryIntermediates
+{
+	FVertexFactoryIntermediatesCommon Common;
+
+	#if VF_USE_PRIMITIVE_SCENE_DATA
+	int PrimitiveLocalInstanceIndex;
+	#endif
+
+	float3 VertexTranslatedWorldPosition;
+	float3 ProjectionOriginTranslatedWorldPosition;
+
+	float3 WorldNormal;
+	half3x3 TangentToLocal;
+	half3x3 TangentToWorld;
+	half TangentToWorldSign;
+
+	float2 UV0;
+	half4 Color;
+
+	bool bEvaluateWorldPositionOffset;
+	float IsVisible;
+};
+
+FPrimitiveSceneData GetPrimitiveData(FVertexFactoryIntermediatesCommon Intermediates) { return Intermediates.SceneData.Primitive; }
+FPrimitiveSceneData GetPrimitiveData(FVertexFactoryIntermediates Intermediates) { return GetPrimitiveData(Intermediates.Common); }
+
+#define SLICEVF_GET_INSTANCE_INPUT(VFInput) InitInstanceInput()
+
+float GetProjectionScale(FVertexFactoryIntermediatesCommon Intermediates)
+{
+	// Scalar Custom Primitive Data index 4 is stored in vector slot 1, component X.
+	const float Scale = GetPrimitiveData(Intermediates).CustomPrimitiveData[1].x;
+	return Scale > 0.0 ? Scale : 1.0;
+}
+
+float4 Transform4DToLocal(float4 Vertex, float ProjectionScale)
+{
+	return mul(Mesh4D.RotAndScale4D, Vertex) * ProjectionScale + Mesh4D.Position4D;
+}
+
+float4 Transform4DToWorld(float4 Vertex)
+{
+	return mul(Camera4D.Camera4DRotation, Vertex - Camera4D.Camera4DPosition);
+}
+
+float3 ApplyInverseCameraRotation3D(float3 Vertex)
+{
+	return mul(Camera4D.Camera3DRotation, Vertex);
+}
+
+void BuildTangentDummyBasis(
+	out float3 OutWorldNormal,
+	out half3x3 OutTangentToLocal,
+	out half3x3 OutTangentToWorld,
+	out half OutTangentToWorldSign)
+{
+	float3 Tangent = float3(1.0, 0.0, 0.0);
+	float3 Binormal = float3(0.0, 1.0, 0.0);
+	float3 Normal = float3(0.0, 0.0, 1.0);
+
+	half3x3 TangentToLocal;
+	TangentToLocal[0] = Tangent;
+	TangentToLocal[1] = Binormal;
+	TangentToLocal[2] = Normal;
+
+	OutWorldNormal = Normal;
+	OutTangentToLocal = TangentToLocal;
+	OutTangentToWorld = TangentToLocal;
+	OutTangentToWorldSign = 1.0;
+}
+
+void ComputeProjectionVertex(
+	float4 InPosition4D,
+	float ProjectionScale,
+	out float3 OutTranslatedWorldPosition,
+	out float3 OutProjectionOriginTranslatedWorldPosition,
+	out float3 OutWorldNormal,
+	out half3x3 OutTangentToLocal,
+	out half3x3 OutTangentToWorld,
+	out half OutTangentToWorldSign,
+	out float OutSliceDistance)
+{
+	float4 Position4D = Transform4DToWorld(Transform4DToLocal(InPosition4D, ProjectionScale));
+	float4 ProjectionOrigin4D = Transform4DToWorld(Transform4DToLocal(float4(0.0, 0.0, 0.0, 0.0), ProjectionScale));
+
+	OutSliceDistance = abs(Position4D.w);
+
+	OutTranslatedWorldPosition = ApplyInverseCameraRotation3D(Position4D.xyz);
+	OutProjectionOriginTranslatedWorldPosition = ApplyInverseCameraRotation3D(ProjectionOrigin4D.xyz);
+
+	// Projection rendering is intended for unlit translucent materials.
+	// Provide a stable dummy normal only to satisfy the UE material pipeline.
+	BuildTangentDummyBasis(OutWorldNormal, OutTangentToLocal, OutTangentToWorld, OutTangentToWorldSign);
+}
+
+FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput Input)
+{
+	FVertexFactoryIntermediates Intermediates = (FVertexFactoryIntermediates)0;
+	FVertexFactoryIntermediatesCommon IntermediatesCommon = (FVertexFactoryIntermediatesCommon)0;
+
+	FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+	IntermediatesCommon.SceneData = SceneData;
+	Intermediates.Common = IntermediatesCommon;
+
+	Intermediates.IsVisible = 1.0f;
+
+	#if USES_WORLD_POSITION_OFFSET
+	#if ALWAYS_EVALUATE_WORLD_POSITION_OFFSET
+	Intermediates.bEvaluateWorldPositionOffset = true;
+	#else
+	Intermediates.bEvaluateWorldPositionOffset =
+		(Intermediates.Common.SceneData.CullingFlags & INSTANCE_CULLING_FLAG_EVALUATE_WPO) != 0;
+	#endif
+	#endif
+
+	const float ProjectionScale = GetProjectionScale(Intermediates.Common);
+	float SliceDistance = 0.0f;
+
+	ComputeProjectionVertex(
+		Input.Position4D,
+		ProjectionScale,
+		Intermediates.VertexTranslatedWorldPosition,
+		Intermediates.ProjectionOriginTranslatedWorldPosition,
+		Intermediates.WorldNormal,
+		Intermediates.TangentToLocal,
+		Intermediates.TangentToWorld,
+		Intermediates.TangentToWorldSign,
+		SliceDistance);
+
+	const float SliceDistanceMax = GetPrimitiveData(Intermediates.Common).CustomPrimitiveData[1].y;
+	const float SliceDistanceRatio = saturate(SliceDistance / SliceDistanceMax); // 0 = near slice; 1 = far from slice
+
+	Intermediates.UV0 = float2(0.0, 0.0);
+	Intermediates.Color = half4(SliceDistanceRatio, 1.0, 1.0, 1.0);
+
+	return Intermediates;
+}
+
+half3x3 VertexFactoryGetTangentToLocal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.TangentToLocal;
+}
+
+float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return float4(Intermediates.VertexTranslatedWorldPosition, 1.0) * Intermediates.IsVisible;
+}
+
+float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input)
+{
+	float3 TranslatedWorldPosition;
+	float3 ProjectionOriginTranslatedWorldPosition;
+	float3 WorldNormal;
+	half3x3 TangentToLocal;
+	half3x3 TangentToWorld;
+	half TangentToWorldSign;
+	float SliceDistance;
+
+	// Fallback path for engine shader permutations without intermediates.
+	// ProjectionScale is unavailable here, so it intentionally uses 1.0.
+	ComputeProjectionVertex(Input.Position4D, 1.0, TranslatedWorldPosition, ProjectionOriginTranslatedWorldPosition, WorldNormal, TangentToLocal, TangentToWorld, TangentToWorldSign, SliceDistance);
+	return float4(TranslatedWorldPosition, 1.0);
+}
+
+
+
+float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.VertexTranslatedWorldPosition - Intermediates.ProjectionOriginTranslatedWorldPosition;
+}
+
+float4 VertexFactoryGetRasterizedWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float4 InWorldPosition)
+{
+	return InWorldPosition;
+}
+
+float3 VertexFactoryGetPositionForVertexLighting(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float3 TranslatedWorldPosition)
+{
+	return TranslatedWorldPosition;
+}
+
+FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, float4 SvPosition)
+{
+	FMaterialPixelParameters Result = MakeInitializedMaterialPixelParameters();
+
+	#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for (int CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++)
+	{
+		Result.TexCoords[CoordinateIndex] = GetUV(Interpolants, CoordinateIndex);
+	}
+	#endif
+
+	half3 TangentToWorld0 = GetTangentToWorld0(Interpolants).xyz;
+	half4 TangentToWorld2 = GetTangentToWorld2(Interpolants);
+	Result.UnMirrored = TangentToWorld2.w;
+
+	Result.VertexColor = GetColor(Interpolants);
+	Result.Particle.Color = half4(1,1,1,1);
+
+	Result.TangentToWorld = AssembleTangentToWorld(TangentToWorld0, TangentToWorld2);
+	Result.TwoSidedSign = 1;
+	Result.PrimitiveId = GetPrimitiveId(Interpolants);
+
+	return Result;
+}
+
+float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.VertexTranslatedWorldPosition - Intermediates.ProjectionOriginTranslatedWorldPosition;
+}
+
+float4 VertexFactoryGetPreviousWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	float3 PrevLocal = VertexFactoryGetPreviousInstanceSpacePosition(Input, Intermediates);
+	FDFMatrix PrevLocalToWorld = Intermediates.Common.SceneData.InstanceData.PrevLocalToWorld;
+	return TransformPreviousLocalPositionToTranslatedWorld(PrevLocal, PrevLocalToWorld);
+}
+
+FMaterialVertexParameters GetMaterialVertexParameters(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	float3 WorldPosition,
+	half3x3 TangentToLocal,
+	bool bIsPreviousFrame = false)
+{
+	FMaterialVertexParameters Result = MakeInitializedMaterialVertexParameters();
+	Result.SceneData = Intermediates.Common.SceneData;
+	Result.PrimitiveId = Intermediates.Common.SceneData.PrimitiveId;
+
+	Result.WorldPosition = WorldPosition;
+
+	if (bIsPreviousFrame)
+	{
+		Result.PositionInstanceSpace = VertexFactoryGetPreviousInstanceSpacePosition(Input, Intermediates);
+	}
+	else
+	{
+		Result.PositionInstanceSpace = VertexFactoryGetInstanceSpacePosition(Input, Intermediates);
+	}
+
+	FPrimitiveSceneData PrimitiveData = GetPrimitiveData(Intermediates);
+	FInstanceSceneData InstanceData = Intermediates.Common.SceneData.InstanceData;
+
+	Result.PositionPrimitiveSpace = Result.PositionInstanceSpace;
+	Result.PrevFrameLocalToWorld  = InstanceData.PrevLocalToWorld;
+	Result.PerInstanceRandom      = InstanceData.RandomID;
+
+	Result.VertexColor = Intermediates.Color;
+	Result.TangentToWorld = Intermediates.TangentToWorld;
+	Result.bEvaluateWorldPositionOffset = Intermediates.bEvaluateWorldPositionOffset;
+
+	#if ENABLE_NEW_HLSL_GENERATOR
+	EvaluateVertexMaterialAttributes(Result);
+	#endif
+
+	Result.LWCData = MakeMaterialLWCData(Result);
+	return Result;
+}
+
+FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	FMaterialVertexParameters VertexParameters)
+{
+	FVertexFactoryInterpolantsVSToPS Interpolants = (FVertexFactoryInterpolantsVSToPS)0;
+
+	#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for (int CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++)
+	{
+		SetUV(Interpolants, CoordinateIndex, Intermediates.UV0);
+	}
+	#endif
+
+	SetTangents(Interpolants, Intermediates.TangentToWorld[0], Intermediates.TangentToWorld[2], Intermediates.TangentToWorldSign);
+	SetColor(Interpolants, Intermediates.Color);
+	SetPrimitiveId(Interpolants, Intermediates.Common.SceneData.PrimitiveId);
+
+	#if HAS_INSTANCE_LOCAL_TO_WORLD_PS
+	SetInstanceLocalToWorld(Interpolants, VertexParameters.InstanceLocalToWorld);
+	#endif
+	#if HAS_INSTANCE_WORLD_TO_LOCAL_PS
+	SetInstanceWorldToLocal(Interpolants, VertexParameters.InstanceWorldToLocal);
+	#endif
+
+	return Interpolants;
+}
+
+float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.WorldNormal;
+}
+
+float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input)
+{
+	float3 TranslatedWorldPosition;
+	float3 ProjectionOriginTranslatedWorldPosition;
+	float3 WorldNormal;
+	half3x3 TangentToLocal;
+	half3x3 TangentToWorld;
+	half TangentToWorldSign;
+	float SliceDistance;
+	ComputeProjectionVertex(Input.Position4D, 1.0, TranslatedWorldPosition, ProjectionOriginTranslatedWorldPosition, WorldNormal, TangentToLocal, TangentToWorld, TangentToWorldSign, SliceDistance);
+	return WorldNormal;
+}
+
+
+
+FSceneDataIntermediates GetSceneDataIntermediates(FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.Common.SceneData;
+}
+
+#if NEEDS_VERTEX_FACTORY_INTERPOLATION
+
+struct FVertexFactoryRayTracingInterpolants
+{
+	FVertexFactoryInterpolantsVSToPS InterpolantsVSToPS;
+};
+
+float2 VertexFactoryGetRayTracingTextureCoordinate(FVertexFactoryRayTracingInterpolants Interpolants)
+{
+#if NUM_MATERIAL_TEXCOORDS
+	return Interpolants.InterpolantsVSToPS.TexCoords[0].xy;
+#else
+	return float2(0,0);
+#endif
+}
+
+FVertexFactoryInterpolantsVSToPS VertexFactoryAssignInterpolants(FVertexFactoryRayTracingInterpolants Input)
+{
+	return Input.InterpolantsVSToPS;
+}
+
+FVertexFactoryRayTracingInterpolants VertexFactoryGetRayTracingInterpolants(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, FMaterialVertexParameters VertexParameters)
+{
+	FVertexFactoryRayTracingInterpolants Interpolants;
+	Interpolants.InterpolantsVSToPS = VertexFactoryGetInterpolantsVSToPS(Input, Intermediates, VertexParameters);
+	return Interpolants;
+}
+
+FVertexFactoryRayTracingInterpolants VertexFactoryInterpolate(FVertexFactoryRayTracingInterpolants A, float AInterp, FVertexFactoryRayTracingInterpolants B, float BInterp)
+{
+	FVertexFactoryRayTracingInterpolants O = (FVertexFactoryRayTracingInterpolants)0;
+
+#if VF_USE_PRIMITIVE_SCENE_DATA
+	O.InterpolantsVSToPS.PrimitiveId = A.InterpolantsVSToPS.PrimitiveId;
+#if NEEDS_LIGHTMAP_COORDINATE
+	O.InterpolantsVSToPS.LightmapDataIndex = A.InterpolantsVSToPS.LightmapDataIndex;
+#endif
+#endif
+
+#if USES_PER_INSTANCE_CUSTOM_DATA && VF_USE_PRIMITIVE_SCENE_DATA
+	O.InterpolantsVSToPS.CustomDataOffset = A.InterpolantsVSToPS.CustomDataOffset;
+	O.InterpolantsVSToPS.CustomDataCount = A.InterpolantsVSToPS.CustomDataCount;
+#endif
+
+#if NEEDS_PER_INSTANCE_RANDOM_PS
+	O.InterpolantsVSToPS.PerInstanceRandom = A.InterpolantsVSToPS.PerInstanceRandom;
+#endif
+
+#if HAS_INSTANCE_LOCAL_TO_WORLD_PS
+	O.InterpolantsVSToPS.InstanceLocalToWorld = A.InterpolantsVSToPS.InstanceLocalToWorld;
+#endif
+#if HAS_INSTANCE_WORLD_TO_LOCAL_PS
+	O.InterpolantsVSToPS.InstanceWorldToLocal = A.InterpolantsVSToPS.InstanceWorldToLocal;
+#endif
+
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.TangentToWorld0.xyz);
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.TangentToWorld2);
+#if INTERPOLATE_VERTEX_COLOR
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.Color);
+#endif
+#if NEEDS_PER_INSTANCE_PARAMS
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.PerInstanceParams);
+#endif
+#if NEEDS_LIGHTMAP_COORDINATE
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.LightMapCoordinate);
+#endif
+#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for(int tc = 0; tc < (NUM_TEX_COORD_INTERPOLATORS+1)/2; ++tc)
+	{
+		INTERPOLATE_MEMBER(InterpolantsVSToPS.TexCoords[tc]);
+	}
+#elif USE_PARTICLE_SUBUVS
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.TexCoords[0]);
+#endif
+
+	return O;
+}
+
+#endif
+
+#if RAYHITGROUPSHADER
+#include "/Engine/Private/RayTracing/RayTracingHitGroupCommon.ush"
+FVertexFactoryInput LoadVertexFactoryInputForHGS(uint TriangleIndex, int VertexIndex)
+{
+	FVertexFactoryInput Input = (FVertexFactoryInput)0;
+	return Input;
+}
+#endif
+
+#define VF_IMPLEMENTED_GET_SCENE_DATA_INTERMEDIATES
+
+#include "/Engine/Private/VertexFactoryDefaultInterface.ush"

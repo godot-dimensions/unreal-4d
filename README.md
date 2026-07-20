@@ -63,6 +63,16 @@ See the `README.md` files in each subdirectory for more details.
 
 If you do not wish to use the example project, you can skip steps 5 to 8.
 
+### Show Unreal 4D classes in the Content Browser
+
+By default, Unreal Engine hides classes from plugins in the Content Browser. To show Unreal 4D classes:
+
+- Click the gear icon at the top-right of the Content Browser.
+- Check the box that says "Plugin Content" in the section below the "SHOW" section.
+- Expand the new "Plugins" folder in the left panel of the Content Browser.
+
+You will now be able to see Unreal 4D classes in the Content Browser.
+
 ### Develop with Visual Studio Code
 
 The example project's build scripts generate Visual Studio Code (VS Code) configuration files, as well as Visual Studio solution files.

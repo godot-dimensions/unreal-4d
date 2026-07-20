@@ -1,0 +1,955 @@
+/*
+ * Shader implementation for FTetraMesh4DVertexFactory.
+ *
+ * Defines the vertex factory shader interface required by the Unreal Engine rendering
+ * pipeline for this custom mesh type. This file provides the per-vertex input layouts
+ * and implements the vertex factory contract used to generate shader code for different
+ * rendering paths, including the material-enabled path and related reduced variants.
+ *
+ * For each input vertex, this vertex factory reconstructs the data required by the
+ * material pipeline, including translated world position, world normal, tangent basis,
+ * previous-frame position, and other per-vertex attributes needed by downstream stages.
+ *
+ * The input data represents tetrahedron-based 4D geometry, and the final 3D slice
+ * geometry is reconstructed on the GPU during vertex processing.
+ */
+
+#include "/Engine/Private/VertexFactoryCommon.ush"
+#include "/Engine/Private/LocalVertexFactoryCommon.ush"
+#include "/Engine/Private/LightmapData.ush"
+
+// Manual vertex fetch is currently disabled.
+// This path requires additional implementation and is not used at the moment.
+#ifndef MANUAL_VERTEX_FETCH
+#define MANUAL_VERTEX_FETCH 0
+#endif
+
+#define VF_REQUIRES_HITPROXY_INDIRECTION 1
+
+/*
+ * Per-vertex input structure passed from CPU to the GPU.
+ *
+ * Defines the vertex attributes layout provided to the vertex shader stage
+ * (and subsequently propagated through the material pipeline to later stages
+ * such as the pixel shader, if required).
+ *
+ * Each vertex carries full tetrahedron data (4D positions and auxiliary parameters),
+ * allowing the shader to reconstruct the slicing context per vertex.
+ *
+ * Part of the vertex factory shader interface contract.
+ */
+struct FVertexFactoryInput
+{
+	uint VertexId : ATTRIBUTE0;
+
+	float4 TetraP0 : ATTRIBUTE1;
+	float4 TetraP1 : ATTRIBUTE2;
+	float4 TetraP2 : ATTRIBUTE3;
+	float4 TetraP3 : ATTRIBUTE4;
+
+	float4 TetraN0 : ATTRIBUTE5;
+	float4 TetraN1 : ATTRIBUTE6;
+	float4 TetraN2 : ATTRIBUTE7;
+	float4 TetraN3 : ATTRIBUTE8;
+
+	float4 TetraParams0 : ATTRIBUTE9;
+	float4 TetraParams1 : ATTRIBUTE10;
+
+	float2 TetraUV0 : ATTRIBUTE11;
+	float2 TetraUV1 : ATTRIBUTE12;
+	float2 TetraUV2 : ATTRIBUTE13;
+	float2 TetraUV3 : ATTRIBUTE14;
+};
+
+/*
+ * Per-vertex input structure used for the "position-only" vertex factory path.
+ *
+ * Provides a reduced set of vertex attributes required for passes that only
+ * depend on position data (e.g. depth-only or shadow passes).
+ *
+ * Attribute order must match the main vertex input layout, while the total
+ * number of attributes is reduced according to the position-only requirements.
+ *
+ * Part of the vertex factory shader interface contract.
+ */
+struct FPositionAndNormalOnlyVertexFactoryInput
+{
+	uint VertexId : ATTRIBUTE0;
+
+	float4 TetraP0 : ATTRIBUTE1;
+	float4 TetraP1 : ATTRIBUTE2;
+	float4 TetraP2 : ATTRIBUTE3;
+	float4 TetraP3 : ATTRIBUTE4;
+
+	float4 TetraN0 : ATTRIBUTE5;
+	float4 TetraN1 : ATTRIBUTE6;
+	float4 TetraN2 : ATTRIBUTE7;
+	float4 TetraN3 : ATTRIBUTE8;
+
+	float4 TetraParams0 : ATTRIBUTE9;
+};
+
+
+/*
+ * Per-vertex input structure for the position-only vertex factory pass.
+ *
+ * Provides only the attributes required for position-only rendering.
+ *
+ * Part of the vertex factory shader interface contract.
+ */
+struct FPositionOnlyVertexFactoryInput
+{
+	uint VertexId : ATTRIBUTE0;
+
+	float4 TetraP0 : ATTRIBUTE1;
+	float4 TetraP1 : ATTRIBUTE2;
+	float4 TetraP2 : ATTRIBUTE3;
+	float4 TetraP3 : ATTRIBUTE4;
+
+	float4 TetraN0 : ATTRIBUTE5;
+	float4 TetraN1 : ATTRIBUTE6;
+	float4 TetraN2 : ATTRIBUTE7;
+	float4 TetraN3 : ATTRIBUTE8;
+};
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+struct FVertexFactoryIntermediatesCommon
+{
+	FSceneDataIntermediates SceneData;
+};
+
+
+/*
+ * Intermediate per-vertex data produced by the vertex factory shader code.
+ *
+ * Stores results of vertex processing that are computed once per vertex and reused
+ * across multiple vertex factory interface functions. These values are later consumed
+ * by the material pipeline (vertex and pixel shaders) as part of the final vertex output.
+ *
+ * Part of the vertex factory shader interface contract.
+ */
+struct FVertexFactoryIntermediates
+{
+	FVertexFactoryIntermediatesCommon Common;
+
+	#if VF_USE_PRIMITIVE_SCENE_DATA
+	int PrimitiveLocalInstanceIndex;
+	#endif
+
+	float3 VertexTranslatedWorldPosition;
+	float3 TetraCenterTranslatedWorldPosition;
+	float  SliceIsValid;
+
+	// Minimal material support
+	float3 WorldNormal;
+	half3x3 TangentToLocal;
+	half3x3 TangentToWorld;
+	half    TangentToWorldSign;
+
+	float2  UV0;
+
+	half4   Color;
+
+	bool    bEvaluateWorldPositionOffset;
+	float   IsVisible;
+};
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+FPrimitiveSceneData GetPrimitiveData(FVertexFactoryIntermediatesCommon Intermediates) { return Intermediates.SceneData.Primitive; }
+FPrimitiveSceneData GetPrimitiveData(FVertexFactoryIntermediates Intermediates) { return GetPrimitiveData(Intermediates.Common); }
+
+
+#define SLICEVF_GET_INSTANCE_INPUT(VFInput) InitInstanceInput()
+
+
+static const int TETRA_EDGE_TO_VERT[12] =
+{
+	0,1,  0,2,  0,3,  1,2,  1,3,  2,3
+};
+
+/*
+ * Lookup table for tetrahedron / slice-plane intersection cases.
+ * Ported from the Godot Dimensions tetra cross-section shader implementation.
+ *
+ * https://github.com/godot-dimensions/godot-4d/blob/main/render/cross_section/tetra_cross_section_shader.glsl
+ */
+static const int CROSS_SECTION_LOOKUP[96] =
+{
+	-1, -1, -1, -1, -1, -1, // 0000
+	 0,  1,  2, -1, -1, -1, // 0001
+	 0,  4,  3, -1, -1, -1, // 0010
+	 2,  4,  1,  3,  1,  4, // 0011
+	 1,  3,  5, -1, -1, -1, // 0100
+	 0,  3,  2,  5,  2,  3, // 0101
+	 1,  0,  5,  4,  5,  0, // 0110
+	 2,  4,  5, -1, -1, -1, // 0111
+	 2,  5,  4, -1, -1, -1, // 1000
+	 1,  5,  0,  4,  0,  5, // 1001
+	 0,  2,  3,  3,  2,  5, // 1010
+	 1,  5,  3, -1, -1, -1, // 1011
+	 2,  1,  4,  4,  1,  3, // 1100
+	 0,  3,  4, -1, -1, -1, // 1101
+	 0,  2,  1, -1, -1, -1, // 1110
+	-1, -1, -1, -1, -1, -1  // 1111
+};
+
+int GetFaceLookupIndex(float w1, float w2, float w3, float w4, int vertex_id)
+{
+	int negative1 = w1 < 0.0 ? 1 : 0;
+	int negative2 = w2 < 0.0 ? 2 : 0;
+	int negative3 = w3 < 0.0 ? 4 : 0;
+	int negative4 = w4 < 0.0 ? 8 : 0;
+	int lookup_index = negative1 + negative2 + negative3 + negative4;
+
+	return (lookup_index * 6) + vertex_id;
+}
+
+float4 Transform4DToLocal(float4 vertex)
+{
+	float4 translatedWorldPos = mul(Mesh4D.RotAndScale4D, vertex) + Mesh4D.Position4D;
+
+	return translatedWorldPos;
+}
+
+float4 Transform4DToWorld(float4 vertex)
+{
+	return mul(Camera4D.Camera4DRotation, vertex - Camera4D.Camera4DPosition);
+}
+
+float3 ApplyInverseCameraRotation3D(float3 vertex)
+{
+	return mul(Camera4D.Camera3DRotation, vertex);
+}
+
+float3 SliceEdge(float4 v1, float4 v2)
+{
+	float mixWeight = v1.w / (v1.w - v2.w);
+	return lerp(v1, v2, mixWeight).xyz;
+}
+
+float4 Transform4DNormalToWorld(float4 normal)
+{
+	float4 localNormal = mul(Mesh4D.RotAndScale4DInverseTranspose, normal);
+	return mul(Camera4D.Camera4DRotation, localNormal);
+}
+
+void BuildTangentBasisFromWorldNormal(
+	float3 InWorldNormal,
+	out float3 OutWorldNormal,
+	out half3x3 OutTangentToLocal,
+	out half3x3 OutTangentToWorld,
+	out half OutTangentToWorldSign)
+{
+	float3 normal = normalize(InWorldNormal);
+
+	float3 referenceAxis = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
+	float3 tangent = normalize(referenceAxis - normal * dot(referenceAxis, normal));
+	float3 binormal = normalize(cross(normal, tangent));
+
+	half3x3 tangentToLocal;
+	tangentToLocal[0] = tangent;
+	tangentToLocal[1] = binormal;
+	tangentToLocal[2] = normal;
+
+	OutWorldNormal = normal;
+	OutTangentToLocal = tangentToLocal;
+	OutTangentToWorld = tangentToLocal;
+	OutTangentToWorldSign = 1.0;
+}
+
+void IntersectEdgeW0(
+	float4 InPos4DA,
+	float4 InPos4DB,
+	float4 InNormalA,
+	float4 InNormalB,
+	float2 InUVA,
+	float2 InUVB,
+	out float4 OutPosition,
+	out float4 OutNormal,
+	out float2 OutUV)
+{
+	const float denom = InPos4DA.w - InPos4DB.w;
+	const float mixWeight = saturate(InPos4DA.w / denom);
+
+	OutPosition = lerp(InPos4DA, InPos4DB, mixWeight);
+	OutNormal = lerp(InNormalA, InNormalB, mixWeight);
+	OutUV = lerp(InUVA, InUVB, mixWeight);
+}
+
+/*
+ * Computes sliced vertex position and shading data for a tetrahedron / slice-plane intersection.
+ *
+ * Implements the tetrahedron slicing algorithm adapted from the Godot Dimensions cross-section shader.
+ *
+ * https://github.com/godot-dimensions/godot-4d/blob/main/render/cross_section/tetra_cross_section_shader.glsl
+ *
+ * Transforms tetrahedron vertices into 4D world space, determines the current intersection case,
+ * reconstructs the sliced vertex position from the lookup table, and computes the resulting
+ * surface normal and tangent basis for material evaluation.
+ */
+void ComputeSliceVertexTranslatedWorldPositionAndNormal(
+	uint VertexId,
+	float4 TetraP0,
+	float4 TetraP1,
+	float4 TetraP2,
+	float4 TetraP3,
+	float4 TetraN0,
+	float4 TetraN1,
+	float4 TetraN2,
+	float4 TetraN3,
+	float2 TetraUV0,
+	float2 TetraUV1,
+	float2 TetraUV2,
+	float2 TetraUV3,
+	out float3 OutTranslatedWorldPos,
+	out float3 OutTetraCenterTranslatedWorldPos,
+	out float OutIsValid,
+	out float3 OutWorldNormal,
+	out half3x3 OutTangentToLocal,
+	out half3x3 OutTangentToWorld,
+	out half OutTangentToWorldSign,
+	out float2 OutUV)
+{
+
+	// TODO: Replace the current 6-vertices-per-tetrahedron representation
+	// with a 4-vertices-per-tetrahedron approach.
+
+	float4 TetraCenter = Transform4DToWorld(Transform4DToLocal((TetraP0 + TetraP1 + TetraP2 + TetraP3) * 0.25));
+
+	float4 v0 = Transform4DToWorld(Transform4DToLocal(TetraP0));
+	float4 v1 = Transform4DToWorld(Transform4DToLocal(TetraP1));
+	float4 v2 = Transform4DToWorld(Transform4DToLocal(TetraP2));
+	float4 v3 = Transform4DToWorld(Transform4DToLocal(TetraP3));
+
+	float4 verts[4] = { v0, v1, v2, v3 };
+	float4 normals[4] = { TetraN0, TetraN1, TetraN2, TetraN3 };
+	float2 uvs[4] = { TetraUV0, TetraUV1, TetraUV2, TetraUV3 };
+
+	uint face = GetFaceLookupIndex(v0.w, v1.w, v2.w, v3.w, VertexId);
+
+	int edgeIndex = CROSS_SECTION_LOOKUP[face];
+
+	if (edgeIndex == -1)
+	{
+		OutTranslatedWorldPos = float3(0, 0, 0);
+		OutTetraCenterTranslatedWorldPos = float3(0, 0, 0);
+		OutWorldNormal = float3(0, 0, 1);
+		OutTangentToLocal = (half3x3) 0;
+		OutTangentToWorld = (half3x3) 0;
+		OutTangentToWorldSign = 1.0;
+		OutUV = float2(0, 0);
+		OutIsValid = 0.0;
+		return;
+	}
+
+	int edgeVert1 = TETRA_EDGE_TO_VERT[edgeIndex * 2];
+	int edgeVert2 = TETRA_EDGE_TO_VERT[(edgeIndex * 2) + 1];
+
+	float4 position;
+	float4 normal4D;
+	float2 uv;
+	IntersectEdgeW0(verts[edgeVert1], verts[edgeVert2], normals[edgeVert1], normals[edgeVert2], uvs[edgeVert1], uvs[edgeVert2], position, normal4D, uv);
+
+	float3 position3D = ApplyInverseCameraRotation3D(position.xyz);
+	float3 normal3D = ApplyInverseCameraRotation3D(Transform4DNormalToWorld(normal4D).xyz);
+
+	BuildTangentBasisFromWorldNormal(normal3D, OutWorldNormal, OutTangentToLocal, OutTangentToWorld, OutTangentToWorldSign);
+
+	OutTetraCenterTranslatedWorldPos = ApplyInverseCameraRotation3D(TetraCenter.xyz);
+	OutTranslatedWorldPos = position3D;
+	OutUV = uv;
+	OutIsValid = 1.0;
+}
+
+void ComputeSliceVertexWorldNormal(
+	uint VertexId,
+	float4 TetraP0,
+	float4 TetraP1,
+	float4 TetraP2,
+	float4 TetraP3,
+	float4 TetraN0,
+	float4 TetraN1,
+	float4 TetraN2,
+	float4 TetraN3,
+	out float3 OutWorldNormal,
+	out float OutIsValid)
+{
+	float4 v0 = Transform4DToWorld(Transform4DToLocal(TetraP0));
+	float4 v1 = Transform4DToWorld(Transform4DToLocal(TetraP1));
+	float4 v2 = Transform4DToWorld(Transform4DToLocal(TetraP2));
+	float4 v3 = Transform4DToWorld(Transform4DToLocal(TetraP3));
+
+	float4 verts[4] = { v0, v1, v2, v3 };
+	float4 normals[4] = { TetraN0, TetraN1, TetraN2, TetraN3 };
+
+	uint face = GetFaceLookupIndex(v0.w, v1.w, v2.w, v3.w, VertexId);
+
+	int edgeIndex = CROSS_SECTION_LOOKUP[face];
+
+	if (edgeIndex == -1)
+	{
+		OutWorldNormal = float3(0, 0, 1);
+		OutIsValid = 0.0;
+		return;
+	}
+
+	int edgeVert1 = TETRA_EDGE_TO_VERT[edgeIndex * 2];
+	int edgeVert2 = TETRA_EDGE_TO_VERT[(edgeIndex * 2) + 1];
+
+	float4 position;
+	float4 normal4D;
+	float2 uv;
+	IntersectEdgeW0(verts[edgeVert1], verts[edgeVert2], normals[edgeVert1], normals[edgeVert2], float2(0, 0), float2(0, 0), position, normal4D, uv);
+
+	OutWorldNormal = normalize(ApplyInverseCameraRotation3D(Transform4DNormalToWorld(normal4D).xyz));
+	OutIsValid = 1.0;
+}
+
+void ComputeSliceVertexTranslatedWorldPosition(
+	uint VertexId,
+	float4 TetraP0, float4 TetraP1, float4 TetraP2, float4 TetraP3,
+	out float3 OutTranslatedWorldPos,
+	out float OutIsValid)
+{
+	float4 v0 = Transform4DToWorld(Transform4DToLocal(TetraP0));
+	float4 v1 = Transform4DToWorld(Transform4DToLocal(TetraP1));
+	float4 v2 = Transform4DToWorld(Transform4DToLocal(TetraP2));
+	float4 v3 = Transform4DToWorld(Transform4DToLocal(TetraP3));
+
+	float4 verts[4] = { v0, v1, v2, v3 };
+
+	uint face = GetFaceLookupIndex(v0.w, v1.w, v2.w, v3.w, VertexId);
+
+	int edgeIndex = CROSS_SECTION_LOOKUP[face];
+
+	if (edgeIndex == -1)
+	{
+		OutTranslatedWorldPos = float3(0, 0, 0);
+		OutIsValid = 0.0;
+		return;
+	}
+
+	int edgeVert1 = TETRA_EDGE_TO_VERT[edgeIndex * 2];
+	int edgeVert2 = TETRA_EDGE_TO_VERT[(edgeIndex * 2) + 1];
+
+	float4 position1 = verts[edgeVert1];
+	float4 position2 = verts[edgeVert2];
+
+ 	float mixWeight = saturate(position1.w / (position1.w - position2.w));
+ 	float4 position = lerp(position1, position2, mixWeight);
+
+	OutTranslatedWorldPos = ApplyInverseCameraRotation3D(position.xyz);
+	OutIsValid = 1.0;
+}
+
+/*
+ * Builds and returns vertex factory intermediates for the material-enabled vertex factory path.
+ *
+ * Part of the vertex factory shader interface contract.
+ */
+FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput Input)
+{
+	FVertexFactoryIntermediates Intermediates = (FVertexFactoryIntermediates)0;
+
+	FVertexFactoryIntermediatesCommon IntermediatesCommon = (FVertexFactoryIntermediatesCommon) 0;
+
+	FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+	IntermediatesCommon.SceneData = SceneData;
+
+	Intermediates.Common = IntermediatesCommon;
+
+	Intermediates.IsVisible = 1.0f;
+
+	// WPO evaluation flag (keep LocalVF behavior)
+	#if USES_WORLD_POSITION_OFFSET
+	#if ALWAYS_EVALUATE_WORLD_POSITION_OFFSET
+	Intermediates.bEvaluateWorldPositionOffset = true;
+	#else
+	Intermediates.bEvaluateWorldPositionOffset =
+		(Intermediates.Common.SceneData.CullingFlags & INSTANCE_CULLING_FLAG_EVALUATE_WPO) != 0;
+	#endif
+	#endif
+
+	ComputeSliceVertexTranslatedWorldPositionAndNormal(
+		Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		Input.TetraN0,
+		Input.TetraN1,
+		Input.TetraN2,
+		Input.TetraN3,
+		Input.TetraUV0,
+		Input.TetraUV1,
+		Input.TetraUV2,
+		Input.TetraUV3,
+		Intermediates.VertexTranslatedWorldPosition,
+		Intermediates.TetraCenterTranslatedWorldPosition,
+		Intermediates.SliceIsValid,
+		Intermediates.WorldNormal,
+		Intermediates.TangentToLocal,
+		Intermediates.TangentToWorld,
+		Intermediates.TangentToWorldSign,
+		Intermediates.UV0);
+
+	Intermediates.Color = half4(1, 1, 1, 1); // temporally set to white until vertex color support is implemented
+
+	Intermediates.TangentToWorld = Intermediates.TangentToLocal;
+	Intermediates.TangentToWorldSign = 1.0;
+
+	return Intermediates;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+half3x3 VertexFactoryGetTangentToLocal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.TangentToLocal;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return float4(Intermediates.VertexTranslatedWorldPosition, 1.0) * (Intermediates.IsVisible * Intermediates.SliceIsValid);
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input)
+{
+
+	float3 translatedWorldPos;
+	float isValid;
+
+	ComputeSliceVertexTranslatedWorldPosition(
+		Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		translatedWorldPos,
+		isValid);
+
+	return float4(translatedWorldPos, 1.0) * isValid;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float4 VertexFactoryGetWorldPosition(FPositionOnlyVertexFactoryInput Input)
+{
+
+	float3 translatedWorldPos;
+	float isValid;
+
+	ComputeSliceVertexTranslatedWorldPosition(
+		Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		translatedWorldPos,
+		isValid);
+
+	return float4(translatedWorldPos, 1.0) * isValid;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float4 VertexFactoryGetWorldPosition(FPositionAndNormalOnlyVertexFactoryInput Input)
+{
+
+	float3 translatedWorldPos;
+	float isValid;
+
+	ComputeSliceVertexTranslatedWorldPosition(
+		Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		translatedWorldPos,
+		isValid);
+
+	return float4(translatedWorldPos, 1.0) * isValid;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.VertexTranslatedWorldPosition - Intermediates.TetraCenterTranslatedWorldPosition;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float4 VertexFactoryGetRasterizedWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float4 InWorldPosition)
+{
+	return InWorldPosition;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetPositionForVertexLighting(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float3 TranslatedWorldPosition)
+{
+	return TranslatedWorldPosition;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVSToPS Interpolants, float4 SvPosition)
+{
+	FMaterialPixelParameters Result = MakeInitializedMaterialPixelParameters();
+
+	#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for (int CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++)
+	{
+		Result.TexCoords[CoordinateIndex] = GetUV(Interpolants, CoordinateIndex);
+	}
+	#endif
+
+	half3 TangentToWorld0 = GetTangentToWorld0(Interpolants).xyz;
+	half4 TangentToWorld2 = GetTangentToWorld2(Interpolants);
+	Result.UnMirrored = TangentToWorld2.w;
+
+	Result.VertexColor = GetColor(Interpolants);
+	Result.Particle.Color = half4(1,1,1,1);
+
+	Result.TangentToWorld = AssembleTangentToWorld(TangentToWorld0, TangentToWorld2);
+	Result.TwoSidedSign = 1;
+	Result.PrimitiveId = GetPrimitiveId(Interpolants);
+
+	return Result;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetPreviousInstanceSpacePosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.VertexTranslatedWorldPosition - Intermediates.TetraCenterTranslatedWorldPosition;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float4 VertexFactoryGetPreviousWorldPosition(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	float3 PrevLocal = VertexFactoryGetPreviousInstanceSpacePosition(Input, Intermediates);
+	FDFMatrix PrevLocalToWorld = Intermediates.Common.SceneData.InstanceData.PrevLocalToWorld;
+	return TransformPreviousLocalPositionToTranslatedWorld(PrevLocal, PrevLocalToWorld);
+}
+
+FMaterialVertexParameters GetMaterialVertexParameters(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	float3 WorldPosition,
+	half3x3 TangentToLocal,
+	bool bIsPreviousFrame = false)
+{
+	FMaterialVertexParameters Result = MakeInitializedMaterialVertexParameters();
+	Result.SceneData = Intermediates.Common.SceneData;
+	Result.PrimitiveId = Intermediates.Common.SceneData.PrimitiveId;
+
+	Result.WorldPosition = WorldPosition;
+
+	if (bIsPreviousFrame)
+	{
+		Result.PositionInstanceSpace = VertexFactoryGetPreviousInstanceSpacePosition(Input, Intermediates);
+	}
+	else
+	{
+		Result.PositionInstanceSpace = VertexFactoryGetInstanceSpacePosition(Input, Intermediates);
+	}
+
+	FPrimitiveSceneData PrimitiveData = GetPrimitiveData(Intermediates);
+	FInstanceSceneData InstanceData = Intermediates.Common.SceneData.InstanceData;
+
+	Result.PositionPrimitiveSpace = Result.PositionInstanceSpace;
+	Result.PrevFrameLocalToWorld  = InstanceData.PrevLocalToWorld;
+	Result.PerInstanceRandom      = InstanceData.RandomID;
+
+	Result.VertexColor = Intermediates.Color;
+	Result.TangentToWorld = Intermediates.TangentToWorld;
+	Result.bEvaluateWorldPositionOffset = Intermediates.bEvaluateWorldPositionOffset;
+
+	#if ENABLE_NEW_HLSL_GENERATOR
+	EvaluateVertexMaterialAttributes(Result);
+	#endif
+
+	Result.LWCData = MakeMaterialLWCData(Result);
+	return Result;
+}
+
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	FMaterialVertexParameters VertexParameters)
+{
+	FVertexFactoryInterpolantsVSToPS Interpolants = (FVertexFactoryInterpolantsVSToPS)0;
+
+	#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for (int CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++)
+	{
+		SetUV(Interpolants, CoordinateIndex, Intermediates.UV0);
+	}
+	#endif
+
+	SetTangents(Interpolants, Intermediates.TangentToWorld[0], Intermediates.TangentToWorld[2], Intermediates.TangentToWorldSign);
+	SetColor(Interpolants, Intermediates.Color);
+
+	SetPrimitiveId(Interpolants, Intermediates.Common.SceneData.PrimitiveId);
+
+	#if HAS_INSTANCE_LOCAL_TO_WORLD_PS
+	SetInstanceLocalToWorld(Interpolants, VertexParameters.InstanceLocalToWorld);
+	#endif
+	#if HAS_INSTANCE_WORLD_TO_LOCAL_PS
+	SetInstanceWorldToLocal(Interpolants, VertexParameters.InstanceWorldToLocal);
+	#endif
+
+	return Interpolants;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.WorldNormal;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetWorldNormal(FVertexFactoryInput Input)
+{
+	float3 WorldNormal;
+	float isValid;
+
+	ComputeSliceVertexWorldNormal(
+	   Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		Input.TetraN0,
+		Input.TetraN1,
+		Input.TetraN2,
+		Input.TetraN3,
+		WorldNormal,
+		isValid);
+
+	return WorldNormal;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetWorldNormal(FPositionOnlyVertexFactoryInput Input)
+{
+	float3 WorldNormal;
+	float isValid;
+
+	ComputeSliceVertexWorldNormal(
+	   Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		Input.TetraN0,
+		Input.TetraN1,
+		Input.TetraN2,
+		Input.TetraN3,
+		WorldNormal,
+		isValid);
+
+	return WorldNormal;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+float3 VertexFactoryGetWorldNormal(FPositionAndNormalOnlyVertexFactoryInput Input)
+{
+	float3 WorldNormal;
+	float isValid;
+
+	ComputeSliceVertexWorldNormal(
+	   Input.VertexId,
+		Input.TetraP0,
+		Input.TetraP1,
+		Input.TetraP2,
+		Input.TetraP3,
+		Input.TetraN0,
+		Input.TetraN1,
+		Input.TetraN2,
+		Input.TetraN3,
+		WorldNormal,
+		isValid);
+
+	return WorldNormal;
+}
+
+/*
+ * Part of the vertex factory shader interface contract.
+ */
+FSceneDataIntermediates GetSceneDataIntermediates(FVertexFactoryIntermediates Intermediates)
+{
+	return Intermediates.Common.SceneData;
+}
+
+/*
+ * Implements the optional interpolation and ray tracing portions of the vertex factory
+ * shader interface contract.
+ *
+ * This section is largely based on LocalVertexFactory.ush and is kept compatible with
+ * the material-enabled vertex factory path. The ray tracing path is currently not fully
+ * supported by this vertex factory and may require additional implementation if ray tracing
+ * support becomes necessary in the future.
+ */
+#if NEEDS_VERTEX_FACTORY_INTERPOLATION
+
+struct FVertexFactoryRayTracingInterpolants
+{
+	FVertexFactoryInterpolantsVSToPS InterpolantsVSToPS;
+};
+
+float2 VertexFactoryGetRayTracingTextureCoordinate( FVertexFactoryRayTracingInterpolants Interpolants )
+{
+#if NUM_MATERIAL_TEXCOORDS
+	return Interpolants.InterpolantsVSToPS.TexCoords[0].xy;
+#else // #if NUM_MATERIAL_TEXCOORDS
+	return float2(0,0);
+#endif // #if NUM_MATERIAL_TEXCOORDS
+}
+
+FVertexFactoryInterpolantsVSToPS VertexFactoryAssignInterpolants(FVertexFactoryRayTracingInterpolants Input)
+{
+	return Input.InterpolantsVSToPS;
+}
+
+FVertexFactoryRayTracingInterpolants VertexFactoryGetRayTracingInterpolants(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, FMaterialVertexParameters VertexParameters)
+{
+	FVertexFactoryRayTracingInterpolants Interpolants;
+	Interpolants.InterpolantsVSToPS = VertexFactoryGetInterpolantsVSToPS(Input, Intermediates, VertexParameters);
+	return Interpolants;
+}
+
+FVertexFactoryRayTracingInterpolants VertexFactoryInterpolate(FVertexFactoryRayTracingInterpolants a, float aInterp, FVertexFactoryRayTracingInterpolants b, float bInterp)
+{
+	// Default initialize. Otherwise, some graphics pipelines that
+	// couple tessellation with geometry shaders won't write to all TEXCOORD semantics,
+	// but read from them when <FVertexFactoryRayTracingInterpolants> is being copied as a whole.
+	FVertexFactoryRayTracingInterpolants O = (FVertexFactoryRayTracingInterpolants)0;
+
+#if VF_USE_PRIMITIVE_SCENE_DATA
+	O.InterpolantsVSToPS.PrimitiveId = a.InterpolantsVSToPS.PrimitiveId;
+#if NEEDS_LIGHTMAP_COORDINATE
+	O.InterpolantsVSToPS.LightmapDataIndex = a.InterpolantsVSToPS.LightmapDataIndex;
+#endif
+#endif
+
+#if USES_PER_INSTANCE_CUSTOM_DATA && VF_USE_PRIMITIVE_SCENE_DATA
+	O.InterpolantsVSToPS.CustomDataOffset = a.InterpolantsVSToPS.CustomDataOffset;
+	O.InterpolantsVSToPS.CustomDataCount  = a.InterpolantsVSToPS.CustomDataCount;
+#endif
+
+#if NEEDS_PER_INSTANCE_RANDOM_PS
+	O.InterpolantsVSToPS.PerInstanceRandom = a.InterpolantsVSToPS.PerInstanceRandom;
+#endif
+
+#if HAS_INSTANCE_LOCAL_TO_WORLD_PS
+	O.InterpolantsVSToPS.InstanceLocalToWorld = a.InterpolantsVSToPS.InstanceLocalToWorld;
+#endif
+
+#if HAS_INSTANCE_WORLD_TO_LOCAL_PS
+	O.InterpolantsVSToPS.InstanceWorldToLocal = a.InterpolantsVSToPS.InstanceWorldToLocal;
+#endif
+
+
+	// Do we really need to interpolate TangentToWorld2 here? It should be replaced by the
+	// interpolated normal from 'whatever' interpolation scheme we're using
+
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.TangentToWorld0.xyz);
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.TangentToWorld2);
+#if INTERPOLATE_VERTEX_COLOR
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.Color);
+#endif
+#if	NEEDS_PER_INSTANCE_PARAMS
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.PerInstanceParams);
+#endif
+
+#if NEEDS_LIGHTMAP_COORDINATE
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.LightMapCoordinate);
+#endif
+
+#if NUM_TEX_COORD_INTERPOLATORS
+	UNROLL
+	for(int tc = 0; tc < (NUM_TEX_COORD_INTERPOLATORS+1)/2; ++tc)
+	{
+		INTERPOLATE_MEMBER(InterpolantsVSToPS.TexCoords[tc]);
+	}
+#elif USE_PARTICLE_SUBUVS
+	INTERPOLATE_MEMBER(InterpolantsVSToPS.TexCoords[0]);
+#endif
+
+	return O;
+}
+
+#endif // #if NEEDS_VERTEX_FACTORY_INTERPOLATION
+
+
+
+#if RAYHITGROUPSHADER
+
+#include "/Engine/Private/RayTracing/RayTracingHitGroupCommon.ush"
+
+FVertexFactoryInput LoadVertexFactoryInputForHGS(uint TriangleIndex, int VertexIndex)
+{
+	FVertexFactoryInput Input = (FVertexFactoryInput) 0;
+
+	FTriangleBaseAttributes Tri = LoadTriangleBaseAttributes(TriangleIndex);
+
+	Input.VertexId = Tri.Indices[VertexIndex];
+	Input.Position = float4(Tri.translatedWorldPositions[VertexIndex], 1.0f);
+#if VF_USE_PRIMITIVE_SCENE_DATA
+	const uint GPUSceneInstanceId = GetInstanceUserData();
+	const FInstanceSceneData InstanceSceneData = GetInstanceSceneData(GPUSceneInstanceId);
+	VF_GPUSCENE_SET_INPUT_FOR_RT(Input, GPUSceneInstanceId, InstanceSceneData.RelativeId);
+
+#if USE_INSTANCING
+	Input.InstanceId = InstanceSceneData.RelativeId;
+#endif
+#else
+	#error "HGS requires GPU Scene support"
+#endif // VF_USE_PRIMITIVE_SCENE_DATA
+
+	return Input;
+}
+
+#endif
+
+
+#define VF_IMPLEMENTED_GET_SCENE_DATA_INTERMEDIATES
+
+#include "/Engine/Private/VertexFactoryDefaultInterface.ush"

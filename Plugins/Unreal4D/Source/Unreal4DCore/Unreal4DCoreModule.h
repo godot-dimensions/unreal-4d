@@ -6,4 +6,8 @@
 
 class FUnreal4DCoreModule final : public IModuleInterface
 {
+	virtual void StartupModule() override;
+	virtual void ShutdownModule() override;
+
+	FDelegateHandle EnginePreExitHandle;
 };
