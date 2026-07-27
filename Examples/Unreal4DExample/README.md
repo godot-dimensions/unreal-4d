@@ -26,3 +26,17 @@ The Windows build scripts support the following command-line arguments:
 - `-GenerateOnly` to regenerate Visual Studio and VS Code metadata without compiling.
 
 When project files are generated, the script also creates a machine-specific, gitignored `.vscode` configuration at the repository root. This makes C++, Unreal reflection-aware headers, and C# module rules discoverable when the `unreal-4d` folder is opened directly in VS Code. See the [root README](../../README.md#develop-with-visual-studio-code) for setup details.
+
+## Compile on macOS or Linux
+
+Run `Build-macOS.command` on macOS or `Build-Linux.sh` on Linux. Both are lightweight wrappers around the shared `Build-Unix.sh` implementation.
+
+The Unix build scripts support the following command-line arguments:
+
+- `--engine-root` if the Unreal source code is located elsewhere.
+- `--target` set to `Editor` or `Game`.
+- `--configuration` set to `Development`, `DebugGame`, or `Shipping`.
+- `--skip-project-files` to skip regenerating VS Code metadata and just rebuild existing C++ files.
+- `--generate-only` to regenerate VS Code metadata without compiling.
+
+The script asks UnrealBuildTool to generate its VS Code workspace and compilation database, adds the external Unreal4D plugin folder, and creates machine-specific `.vscode` files at the repository root. It does not update this repository or the Unreal Engine checkout.

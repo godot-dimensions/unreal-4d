@@ -17,6 +17,18 @@ The Windows build scripts support the following command-line arguments:
 - `-PackageDir` to specify the destination for the generated plugin package. Default is `BuildArtifacts/Unreal4D-Win64`.
 - `-TargetPlatforms` passed to Unreal's BuildPlugin. Default is `Win64`.
 
+## Compile on macOS or Linux
+
+Run `Build-macOS.command` on macOS or `Build-Linux.sh` on Linux. Both are lightweight wrappers around the shared `Build-Unix.sh` implementation.
+
+The Unix build scripts support the following command-line arguments:
+
+- `--engine-root` if the Unreal source code is located elsewhere.
+- `--package-dir` to specify the destination for the generated plugin package.
+- `--target-platforms` passed to Unreal's BuildPlugin. The default is automatically selected as `Mac` or `Linux`.
+
+The build scripts only package the plugin. They do not update this repository or the Unreal Engine checkout.
+
 ## Folder struccture
 
 This folder contains the plugin, and within it:

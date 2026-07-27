@@ -40,7 +40,8 @@ IOG has since pivoted the reusable engine-level technology, releasing it as open
     - The "Desktop development with C++" workload.
     - The "Game development with C++" workload.
     - Unreal Engine workload components.
-- macOS and Linux are currently untested and unsupported.
+- On macOS and Linux, install the platform build dependencies required by your Unreal Engine source checkout.
+- The macOS and Linux scripts are new and have not yet been validated on those platforms.
 
 ### Compile on Windows
 
@@ -63,6 +64,20 @@ See the `README.md` files in each subdirectory for more details.
 
 If you do not wish to use the example project, you can skip steps 5 to 8.
 
+### Compile on macOS or Linux
+
+1. Follow the Unreal Engine instructions to set up and build the engine for your platform.
+2. Apply the appropriate engine patch in [`EnginePatches/`](EnginePatches/) to your Unreal Engine source checkout.
+3. Recompile the engine after applying the patch.
+4. From this repository's root, run `Build-macOS.command` on macOS or `Build-Linux.sh` on Linux.
+    - The root script packages the plugin, generates VS Code metadata, and builds the example project.
+    - `Build-macOS.command` can be double-clicked in Finder.
+    - `Build-Unix.sh` contains the shared implementation and can be invoked directly from a terminal or another build script.
+
+The platform-specific scripts automatically select `Mac` or `Linux`. Pass `--engine-root` or set `UNREAL_ENGINE_ROOT` when the Unreal Engine checkout is located somewhere other than the adjacent `UnrealEngine5` directory.
+
+You can also run the scripts in [`Plugins/Unreal4D/`](Plugins/Unreal4D/) and [`Examples/Unreal4DExample/`](Examples/Unreal4DExample/) independently. See their README files for supported arguments.
+
 ### Show Unreal 4D classes in the Content Browser
 
 By default, Unreal Engine hides classes from plugins in the Content Browser. To show Unreal 4D classes:
@@ -75,9 +90,9 @@ You will now be able to see Unreal 4D classes in the Content Browser.
 
 ### Develop with Visual Studio Code
 
-The example project's build scripts generate Visual Studio Code (VS Code) configuration files, as well as Visual Studio solution files.
+The example project's build scripts generate Visual Studio Code (VS Code) configuration files. The Windows script also generates Visual Studio solution files.
 
-Visual Studio and its C++ toolchain are still required for compiling Unreal Engine projects on Windows, but Visual Studio Code (VS Code) can be used as the code editor.
+The platform C++ toolchain is still required for compiling Unreal Engine projects, but Visual Studio Code can be used as the code editor.
 
 1. Generate and compile everything, as described above.
 2. Open this repository's root folder, `unreal-4d`, in Visual Studio Code.
