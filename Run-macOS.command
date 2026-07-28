@@ -15,7 +15,7 @@ die_and_wait() {
 
 script_parent=$(dirname "$0")
 script_dir=$(CDPATH= cd -P "$script_parent" && pwd)
-run_script=$script_dir/Examples/Unreal4DExample/Run-macOS.command
+run_script=$script_dir/Examples/Unreal4DExample/Run-Unix.sh
 
 [ -f "$run_script" ] || die_and_wait "Example run script not found: $run_script"
 

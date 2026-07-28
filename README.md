@@ -40,8 +40,7 @@ IOG has since pivoted the reusable engine-level technology, releasing it as open
     - The "Desktop development with C++" workload.
     - The "Game development with C++" workload.
     - Unreal Engine workload components.
-- On macOS and Linux, install the platform build dependencies required by your Unreal Engine source checkout.
-- The macOS and Linux scripts are new and have not yet been validated on those platforms.
+- On macOS and Linux, install the platform build dependencies required by Unreal Engine.
 
 ### Compile on Windows
 
@@ -76,9 +75,9 @@ If you do not wish to use the example project, you can skip steps 5 to 8.
     - `Build-macOS.command` can be double-clicked in Finder.
     - `Build-Unix.sh` contains the shared implementation and can be invoked directly from a terminal or another build script.
 5. To build and open the example in the Unreal Editor in one step, run `Run-macOS.command` on macOS or `Run-Linux.sh` on Linux.
-  - The run scripts accept the same arguments as their corresponding build scripts.
-  - Pass `--skip-build` to open the existing editor build without rebuilding.
-  - `Run-macOS.command` can be double-clicked in Finder.
+    - The run scripts accept the same arguments as their corresponding build scripts.
+    - Pass `--skip-build` to open the existing editor build without rebuilding.
+    - `Run-macOS.command` can be double-clicked in Finder.
 
 The platform-specific scripts automatically select `Mac` or `Linux`. Pass `--engine-root` or set `UNREAL_ENGINE_ROOT` when the Unreal Engine checkout is located somewhere other than the adjacent `UnrealEngine5` directory.
 
