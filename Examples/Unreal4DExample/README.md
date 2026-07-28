@@ -27,6 +27,13 @@ The Windows build scripts support the following command-line arguments:
 
 When project files are generated, the script also creates a machine-specific, gitignored `.vscode` configuration at the repository root. This makes C++, Unreal reflection-aware headers, and C# module rules discoverable when the `unreal-4d` folder is opened directly in VS Code. See the [root README](../../README.md#develop-with-visual-studio-code) for setup details.
 
+## Run the editor on Windows
+
+Run `Run-Windows.bat` to build this example and open it in the Unreal Editor. The batch file can be double-clicked in Windows Explorer. For terminal uses, run `Run-Windows.ps1` directly.
+
+- The run scripts accept the same arguments as the Windows build scripts.
+- Pass `-SkipBuild` to open the existing editor build without rebuilding.
+
 ## Compile on macOS or Linux
 
 Run `Build-macOS.command` on macOS or `Build-Linux.sh` on Linux. Both are lightweight wrappers around the shared `Build-Unix.sh` implementation.
@@ -40,3 +47,11 @@ The Unix build scripts support the following command-line arguments:
 - `--generate-only` to regenerate VS Code metadata without compiling.
 
 The script asks UnrealBuildTool to generate its VS Code workspace and compilation database, adds the external Unreal4D plugin folder, and creates machine-specific `.vscode` files at the repository root. It does not update this repository or the Unreal Engine checkout.
+
+## Run the editor on macOS or Linux
+
+Run `Run-macOS.command` on macOS or `Run-Linux.sh` on Linux to build this example and open it in the Unreal Editor.
+
+- The run scripts accept the same arguments as the build scripts.
+- Pass `--skip-build` to open the existing editor build without rebuilding.
+- `Run-macOS.command` can be double-clicked in Finder.

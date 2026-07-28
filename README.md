@@ -58,6 +58,8 @@ IOG has since pivoted the reusable engine-level technology, releasing it as open
 7. Set "Unreal4DExample" as the startup project.
 8. Build and run the project to start the Unreal editor.
 
+Alternatively, run `Run-Windows.bat` from this repository's root to build and open the example in one step. Pass `-SkipBuild` to launch an existing editor build without rebuilding.
+
 The Windows `.bat` and `.ps1` scripts do the same thing. The `.bat` script calls the `.ps1` script, for convenience of double-clicking from Windows Explorer. Otherwise, the `.ps1` script should be ran directly, such as from a terminal, or from a build script.
 
 See the `README.md` files in each subdirectory for more details.
@@ -73,6 +75,10 @@ If you do not wish to use the example project, you can skip steps 5 to 8.
     - The root script packages the plugin, generates VS Code metadata, and builds the example project.
     - `Build-macOS.command` can be double-clicked in Finder.
     - `Build-Unix.sh` contains the shared implementation and can be invoked directly from a terminal or another build script.
+5. To build and open the example in the Unreal Editor in one step, run `Run-macOS.command` on macOS or `Run-Linux.sh` on Linux.
+  - The run scripts accept the same arguments as their corresponding build scripts.
+  - Pass `--skip-build` to open the existing editor build without rebuilding.
+  - `Run-macOS.command` can be double-clicked in Finder.
 
 The platform-specific scripts automatically select `Mac` or `Linux`. Pass `--engine-root` or set `UNREAL_ENGINE_ROOT` when the Unreal Engine checkout is located somewhere other than the adjacent `UnrealEngine5` directory.
 
