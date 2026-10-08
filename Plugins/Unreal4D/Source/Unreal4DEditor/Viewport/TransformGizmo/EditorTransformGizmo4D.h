@@ -83,6 +83,7 @@ private:
 	void HandleCoordSystemChanged(ECoordSystem InCoordSystem);
 	void ReadFromEditorViewportSettings();
 	FTransform4D GetEditorCameraTransform4DForViewport() const;
+	double CalculateGizmoScale() const;
 
 	// Helper to convert world ray to local 4D ray data with internal scale handling.
 	void GetLocalRayDataWithScale(const FInputDeviceRay& InDeviceRay, FVector4& OutLocalRayOrigin, FVector4& OutLocalRayDirection, FMatrix& OutLocalCameraMatrix) const;
@@ -97,6 +98,7 @@ public:
 	// 4D-specific configuration by the builder and factory.
 	void SetWorld(UWorld* InWorld) { _world = InWorld; }
 	void Setup4D(const TArray<UScene4DComponent*>& InObjects4D, const FEditorTransformGizmo4DPartVisibilitySettings InVisibilitySettings, const ECoordSystem InCoordSystem, FEditorModeTools* InModeTools, FEditorViewportClient* InViewportClient = nullptr);
+	void ConfigureGridSnapping(bool bInPositionGridEnabled, bool bInRotationGridEnabled);
 	bool DuplicateSelectedObjects();
 	static bool DuplicateSelectedObjectsStatic();
 

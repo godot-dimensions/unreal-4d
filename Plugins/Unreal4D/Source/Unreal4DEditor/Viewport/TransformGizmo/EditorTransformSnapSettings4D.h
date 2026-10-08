@@ -45,6 +45,7 @@ public:
 	void BeginDestroy() override;
 
 	void ReadFromEditorViewportSettings();
+	void ConfigureGridSnapping(const bool bInPositionGridEnabled, const bool bInRotationGridEnabled);
 
 	FTransform4D SnapSingleTransform(const FTransform4D& InTransform) const;
 	FTransform4D SnapTransformChange(const FTransform4D& InOldTransform, const FTransform4D& InTransformChange) const;

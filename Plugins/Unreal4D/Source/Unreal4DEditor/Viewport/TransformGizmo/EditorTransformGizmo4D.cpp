@@ -724,6 +724,28 @@ void UEditorTransformGizmo4D::Shutdown()
 	Super::Shutdown();
 }
 
+void UEditorTransformGizmo4D::ConfigureGridSnapping(bool bInPositionGridEnabled, bool bInRotationGridEnabled)
+{
+	if (_snapSettings != nullptr)
+	{
+		_snapSettings->ConfigureGridSnapping(bInPositionGridEnabled, bInRotationGridEnabled);
+	}
+}
+
+double UEditorTransformGizmo4D::CalculateGizmoScale() const
+{
+	if (_gizmoViewContext == nullptr)
+	{
+		return 1.0;
+	}
+	// Use the rendered position: project relative to the 4D camera, then return to Unreal world space.
+	const FVector4 cameraRelativeOrigin4D = GetEditorCameraTransform4DForViewport().Inverse().TransformPosition(_transformProxy4D->GetOldTransform4D().Origin);
+	const FMatrix cameraBasis3D = FRotationMatrix::MakeFromXZ(_gizmoViewContext->GetViewDirection(), _gizmoViewContext->GetViewUp());
+	const FVector gizmoOrigin3D = _gizmoViewContext->GetViewLocation() + cameraBasis3D.TransformVector(UVectorFuncs4D::Vector4_To3D(cameraRelativeOrigin4D));
+	const double scale = UE::GizmoRenderingUtil::CalculateLocalPixelToWorldScale(_gizmoViewContext, gizmoOrigin3D);
+	return FMath::IsFinite(scale) ? FMath::Max(scale, UE_DOUBLE_SMALL_NUMBER) : 1.0;
+}
+
 FTransform4D UEditorTransformGizmo4D::GetEditorCameraTransform4DForViewport() const
 {
 	if (_viewportClient == nullptr || _modeTools == nullptr)
@@ -857,12 +879,7 @@ void UEditorTransformGizmo4D::GetLocalRayDataWithScale(const FInputDeviceRay& In
 	double gizmoScale = _gizmoScale;
 	if (_currentTransformation == EEditorTransformGizmo4DPart::None)
 	{
-		gizmoScale = 1.0;
-		if (_gizmoViewContext)
-		{
-			FVector GizmoOrigin3D = UVectorFuncs4D::Vector4_To3D(gizmoOldTransform.GetOrigin());
-			gizmoScale = UE::GizmoRenderingUtil::CalculateLocalPixelToWorldScale(_gizmoViewContext, GizmoOrigin3D);
-		}
+		gizmoScale = CalculateGizmoScale();
 	}
 	const FTransform4D inverseGizmoOldTransform = gizmoOldTransform.Inverse();
 	OutLocalRayOrigin = inverseGizmoOldTransform.TransformPosition(worldRayOrigin4D) / (gizmoScale * UNREAL4D_EDITOR_TRANSFORM_GIZMO_EXTENTS);
@@ -902,16 +919,7 @@ void UEditorTransformGizmo4D::OnClickPress(const FInputDeviceRay& InPressPos)
 		return;
 	}
 	// Calculate and cache the gizmo scale using pixel-to-world conversion.
-	if (_gizmoViewContext)
-	{
-		// TODO: This should take into account the camera-relative 4D transform, not just the 3D position.
-		FVector GizmoOrigin3D = UVectorFuncs4D::Vector4_To3D(_transformProxy4D->GetOldTransform4D().GetOrigin());
-		_gizmoScale = UE::GizmoRenderingUtil::CalculateLocalPixelToWorldScale(_gizmoViewContext, GizmoOrigin3D);
-	}
-	else
-	{
-		_gizmoScale = 1.0;
-	}
+	_gizmoScale = CalculateGizmoScale();
 	// Get local ray data.
 	FVector4 localRayOrigin, localRayDirection;
 	FMatrix localCameraMatrix;

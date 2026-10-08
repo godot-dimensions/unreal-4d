@@ -181,7 +181,7 @@ void UEditorTransformGizmo4DFactory::ConfigureGridSnapping(bool bInPositionGridE
 		UEditorTransformGizmo4D* gizmo4D = Cast<UEditorTransformGizmo4D>(gizmo);
 		if (gizmo4D != nullptr)
 		{
-			// TODO: Implement snapping.
+			gizmo4D->ConfigureGridSnapping(bInPositionGridEnabled, bInRotationGridEnabled);
 		}
 	}
 }

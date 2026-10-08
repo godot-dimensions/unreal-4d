@@ -56,7 +56,15 @@ void UEditorTransformSnapSettings4D::ReadFromEditorViewportSettings()
 	_positionSnapDistanceCentimeters = GEditor->GetGridSize();
 	const FRotator rotGridSize = GEditor->GetRotGridSize();
 	_rotationSnapAngleRadians = FMath::DegreesToRadians((double)rotGridSize.Pitch);
-	_scaleSnapRatio = GEditor->GetScaleGridSize();
+	_scaleSnapRatio = GEditor->GetScaleGridSize() * (viewportSettings->UsePercentageBasedScaling() ? 0.01 : 1.0);
+}
+
+void UEditorTransformSnapSettings4D::ConfigureGridSnapping(const bool bInPositionGridEnabled, const bool bInRotationGridEnabled)
+{
+	// The factory calls this each tick, so toolbar increments and scale snapping stay current too.
+	ReadFromEditorViewportSettings();
+	_bPositionSnapInvertKeybind = bInPositionGridEnabled;
+	_bRotationSnapInvertKeybind = bInRotationGridEnabled;
 }
 
 bool UEditorTransformSnapSettings4D::IsSnapModifierPressedInEditor()
