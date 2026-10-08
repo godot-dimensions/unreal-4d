@@ -8,6 +8,7 @@ public class Unreal4DEditor : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
+			"AssetRegistry",
 			"AssetTools",
 			"Chaos",
 			"Core",
@@ -18,8 +19,11 @@ public class Unreal4DEditor : ModuleRules
 			"InputCore",
 			"InteractiveToolsFramework",
 			"Kismet",
+			"LevelEditor",
+			"PropertyEditor",
 			"Slate",
 			"SlateCore",
+			"TypedElementFramework",
 			"Unreal4DCore",
 			"UnrealEd",
 		});

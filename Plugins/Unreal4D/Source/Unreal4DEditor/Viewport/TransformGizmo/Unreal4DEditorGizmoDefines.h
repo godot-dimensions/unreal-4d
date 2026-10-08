@@ -2,6 +2,8 @@
 
 #include "../../Unreal4DEditorDefines.h"
 
+#include "Unreal4DEditorGizmoDefines.generated.h"
+
 class AEditorGizmoActor4D;
 class UEditorTransformGizmo4D;
 class UEditorTransformProxy4D;

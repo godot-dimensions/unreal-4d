@@ -35,6 +35,9 @@
 #include "IAssetTools.h"
 
 // Globals.
+#include "PropertyEditorModule.h"
+#include "TimerManager.h"
+#include "Subsystems/AssetEditorSubsystem.h"
 #include "CoreGlobals.h"
 #include "Editor/UnrealEdEngine.h"
 #include "Selection.h"
