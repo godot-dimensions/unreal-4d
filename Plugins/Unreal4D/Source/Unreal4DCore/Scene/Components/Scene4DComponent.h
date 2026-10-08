@@ -15,7 +15,7 @@ enum class ERotationEditMode4D : uint8
 };
 
 #if WITH_EDITOR
-class FScene4DComponentDetails;
+class FEditorScene4DComponentDetails;
 #endif // WITH_EDITOR
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnAnyTransform4DChanged, UScene4DComponent*);
@@ -28,7 +28,7 @@ UCLASS(BlueprintType, Category = "Unreal 4D|Component", meta = (BlueprintSpawnab
 class UNREAL4DCORE_API UScene4DComponent : public UPrimitiveComponent
 {
 	GENERATED_BODY()
-	friend class FScene4DComponentDetails;
+	friend class FEditorScene4DComponentDetails;
 	friend class FUnreal4DEditorModule;
 
 private:

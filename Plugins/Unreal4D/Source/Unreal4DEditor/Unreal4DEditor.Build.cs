@@ -17,10 +17,13 @@ public class Unreal4DEditor : ModuleRules
 			"GizmoEdMode",
 			"InputCore",
 			"InteractiveToolsFramework",
+			"Kismet",
 			"Slate",
 			"SlateCore",
 			"Unreal4DCore",
 			"UnrealEd",
 		});
+		// Access Kismet private headers for SSCSEditorViewport (needed for Blueprint gizmo integration).
+		PrivateIncludePaths.Add(System.IO.Path.Combine(EngineDirectory, "Source", "Editor", "Kismet", "Private"));
 	}
 }
