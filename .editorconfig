@@ -1,11 +1,27 @@
+root = true
+
 [*]
 charset = utf-8
 end_of_line = lf
 insert_final_newline = true
 indent_size = 4
 indent_style = tab
+tab_width = 4
 max_line_length = 200
 trim_trailing_whitespace = true
+
+# MSBuild and XML configuration files.
+[*.{csproj,proj,projitems,shproj,fsproj,target,props,config,nuspec,resx,natvis}]
+indent_size = 2
+indent_style = space
+
+[*.py]
+indent_size = 4
+indent_style = space
+
+[*.{yaml,yml}]
+indent_size = 2
+indent_style = space
 
 [*.md]
 

@@ -8,6 +8,9 @@
 *.suo
 *.VC.db
 *.VC.opendb
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
 *.xcodeproj
 *.xcworkspace
 .idea/
@@ -46,13 +49,23 @@ compile_commands.json
 *.ipa
 *.out
 
+# Precompiled Assets
+**/SourceArt/**/*.png
+**/SourceArt/**/*.tga
+
+# Binary Files
+Binaries/*
+Plugins/**/Binaries/*
+
+# Builds
+**/Build/**
+
 # Whitelist PakBlacklist-<BuildConfiguration>.txt files
-!Build/*/
-Build/*/**
-!Build/*/PakBlacklist*.txt
+!**/Build/**/
+!**/Build/**/PakBlacklist*.txt
 
 # Don't ignore icon files in Build
-!Build/**/*.ico
+!**/Build/**/*.ico
 
 # Built data for maps
 *_BuiltData.uasset
@@ -70,10 +83,26 @@ Saved/*
 **/DerivedDataCache/
 **/Intermediate/
 **/Saved/
+ArchivedBuilds/
+
+# Generated Steam content-builder output, if the existing build tools are copied.
+/BuildTool/steamworks_sdk_*/tools/ContentBuilder/output/
 
 # Cache files for the editor to use
 DerivedDataCache/*
+Binds.Cache
+Binds.Cache.Headers
+
+# Debug data, build caches, and backups.
+*.pdb
+*.uba
+*.blend1
+enc_temp_folder/
+__pycache__/
+*.py[co]
 
 # Operating system files
 .DS_Store
+[Dd]esktop.ini
 Thumbs.db
+*~
