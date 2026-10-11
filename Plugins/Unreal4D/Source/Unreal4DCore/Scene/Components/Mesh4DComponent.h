@@ -57,11 +57,11 @@ private:
 	void BindMesh4DDelegate();
 	void UnbindMesh4DDelegate();
 
+protected:
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif // WITH_EDITOR
 
-protected:
 	void OnTransform4DChanged() override;
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
@@ -84,7 +84,7 @@ public:
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 
 	/** Refreshes the camera-relative bounds used by Unreal's renderer and the projection component. */
-	void UpdateBoundsForCamera(const FTransform4D& InCameraTransform4D, const FTransform& InCameraTransform3D);
+	virtual void UpdateBoundsForCamera(const FTransform4D& InCameraTransform4D, const FTransform& InCameraTransform3D);
 
 	/** Flags the mesh as needing a camera-relative bounds update at the end of the frame.
 	  * @see URenderingServer4D.
@@ -92,7 +92,7 @@ public:
 	void MarkBoundsDirty();
 
 	UMesh4D* GetMesh4DForProjection() const;
-	UMaterialInterface* GetProjectionMaterialForProjectionComponent() const;
+	virtual UMaterialInterface* GetProjectionMaterialForProjectionComponent() const;
 	FLinearColor GetProjectionColorForProjectionComponent() const;
 	float GetProjectionOpacityForProjectionComponent() const;
 	float GetProjectionScaleForProjectionComponent() const;
