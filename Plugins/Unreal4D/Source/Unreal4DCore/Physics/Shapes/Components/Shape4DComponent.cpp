@@ -113,8 +113,17 @@ UCollisionObject4DComponent* UShape4DComponent::FindAncestorCollisionObject() co
 	}
 	UWorld* world = GetWorld();
 	ensure(world != nullptr);
+	if (world == nullptr)
+	{
+		return nullptr;
+	}
 	UPhysicsServer4DWorldSubsystem* physicsServer4D = world->GetSubsystem<UPhysicsServer4DWorldSubsystem>();
-	ensure(physicsServer4D != nullptr);
+	ensure(physicsServer4D != nullptr || world->WorldType == EWorldType::Inactive);
+	if (physicsServer4D == nullptr)
+	{
+		// Inactive maps have no physics subsystem. Shapes register again when the map becomes an editor or game world.
+		return nullptr;
+	}
 	return physicsServer4D->GetOrCreateWorldStaticBody();
 }
 
