@@ -25,7 +25,7 @@ enum class ECamera4DPerpFadeMode : uint8
 };
 
 UCLASS(BlueprintType, Category = "Unreal 4D|Component|Camera", meta=(BlueprintSpawnableComponent))
-class UCamera4DComponent : public UCameraComponent
+class UNREAL4DCORE_API UCamera4DComponent : public UCameraComponent
 {
 	GENERATED_BODY()
 

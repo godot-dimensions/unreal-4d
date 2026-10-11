@@ -83,7 +83,7 @@ const TArray<FRect4D>& UAxisAlignedBoxPhysicsEngine4D::GetBodyShapeRects(UCollis
 {
 	if (!_areaAndBodyRects.Contains(InMovingBody) || _areaAndBodyRects[InMovingBody].Num() != InBodyShapes.Num())
 	{
-		_areaAndBodyRects[InMovingBody] = CalculateShapeRects(InBodyShapes);
+		_areaAndBodyRects.Add(InMovingBody, CalculateShapeRects(InBodyShapes));
 	}
 	return _areaAndBodyRects[InMovingBody];
 }
@@ -242,7 +242,7 @@ TSet<UArea4DComponent*> UAxisAlignedBoxPhysicsEngine4D::StepDynamicRigidBody(UDy
 			}
 		}
 		InMovingBody->LinearVelocity = linearVelocity;
-		_dynamicBodyRectQueue[InMovingBody] = currentMovingShapeRects;
+		_dynamicBodyRectQueue.Add(InMovingBody, currentMovingShapeRects);
 	}
 	return overlappingAreas;
 }
@@ -370,12 +370,12 @@ void UAxisAlignedBoxPhysicsEngine4D::PhysicsProcess(const double InDeltaTime)
 	for (int areaIndex = 0; areaIndex < areaComponents.Num(); areaIndex++)
 	{
 		UCollisionObject4DComponent* areaComponent = Cast<UCollisionObject4DComponent>(areaComponents[areaIndex]);
-		_areaAndBodyRects[areaComponent] = CalculateShapeRects(areaComponent->GetCollisionShapes());
+		_areaAndBodyRects.Add(areaComponent, CalculateShapeRects(areaComponent->GetCollisionShapes()));
 	}
 	for (int bodyIndex = 0; bodyIndex < bodyComponents.Num(); bodyIndex++)
 	{
 		UCollisionObject4DComponent* bodyNode = Cast<UCollisionObject4DComponent>(bodyComponents[bodyIndex]);
-		_areaAndBodyRects[bodyNode] = CalculateShapeRects(bodyNode->GetCollisionShapes());
+		_areaAndBodyRects.Add(bodyNode, CalculateShapeRects(bodyNode->GetCollisionShapes()));
 		// Also since we're in a loop with bodies, apply gravity here, before stepping.
 		UDynamicBody4DComponent* dynamicBody = Cast<UDynamicBody4DComponent>(bodyNode);
 		if (dynamicBody != nullptr)

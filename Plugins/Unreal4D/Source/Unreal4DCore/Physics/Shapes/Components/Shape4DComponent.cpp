@@ -156,6 +156,7 @@ void UShape4DComponent::SetShapeData(UShape4DData* InNewShapeData4D)
 	{
 		Shape4D = DuplicateObject<UShape4DData>(InNewShapeData4D, this);
 	}
+	EnsureShapeDataIsOwned();
 	UpdateComponentFromShape();
 }
 
@@ -164,6 +165,11 @@ void UShape4DComponent::EnsureShapeDataIsOwned()
 	if (IsValid(Shape4D) && Shape4D->GetOuter() != this)
 	{
 		Shape4D = DuplicateObject<UShape4DData>(Shape4D, this);
+	}
+	if (IsValid(Shape4D))
+	{
+		// Blueprint instances reference these shapes as archetypes, so template shapes must inherit their owner's flags.
+		Shape4D->SetFlags(GetMaskedFlags(RF_PropagateToSubObjects));
 	}
 }
 
@@ -207,6 +213,7 @@ FRaycastResult4D UShape4DComponent::RaycastIntersectsLocal4D(const FVector4& InL
 
 void UShape4DComponent::PostInitProperties()
 {
+	EnsureShapeDataIsOwned();
     if (!HasAnyFlags(RF_ClassDefaultObject))
     {
 		ensure(Shape4D != nullptr && IsValid(Shape4D)); // Derived classes MUST initialize a shape in their construction logic.
@@ -216,6 +223,7 @@ void UShape4DComponent::PostInitProperties()
 
 void UShape4DComponent::PostLoad()
 {
+	EnsureShapeDataIsOwned();
     if (!HasAnyFlags(RF_ClassDefaultObject))
     {
 		ensure(Shape4D != nullptr && IsValid(Shape4D)); // Derived classes MUST initialize a shape in their construction logic.
