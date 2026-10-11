@@ -32,7 +32,9 @@ When project files are generated, the script also creates a machine-specific, gi
 Run `Run-Windows.bat` to build this example and open it in the Unreal Editor. The batch file can be double-clicked in Windows Explorer. For terminal uses, run `Run-Windows.ps1` directly.
 
 - The run scripts accept the same arguments as the Windows build scripts.
-- Pass `-SkipBuild` to open the existing editor build without rebuilding.
+- Pass `-SkipBuild` to open the existing editor build without rebuilding. This cannot be combined with `-GenerateOnly`.
+- Pass `-GenerateOnly` to generate IDE metadata without building or opening the editor. This cannot be combined with `-SkipBuild`.
+- `-Configuration DebugGame` launches the editor with `-debug` to load the DebugGame modules.
 
 ## Compile on macOS or Linux
 
@@ -53,5 +55,7 @@ The script asks UnrealBuildTool to generate its VS Code workspace and compilatio
 Run `Run-macOS.command` on macOS or `Run-Linux.sh` on Linux to build this example and open it in the Unreal Editor.
 
 - The run scripts accept the same arguments as the build scripts.
-- Pass `--skip-build` to open the existing editor build without rebuilding.
+- Pass `--skip-build` to open the existing editor build without rebuilding. This cannot be combined with `--generate-only`.
+- Pass `--generate-only` to generate IDE metadata without building or opening the editor. This cannot be combined with `--skip-build`.
+- `--configuration DebugGame` launches the editor with `-debug` to load the DebugGame modules.
 - `Run-macOS.command` can be double-clicked in Finder.

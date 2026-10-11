@@ -5,6 +5,9 @@
 set -eu
 
 skip_build=0
+generate_only=0
+configuration=Development
+engine_root=
 
 die() {
     printf 'ERROR: %s\n' "$*" >&2
@@ -31,30 +34,43 @@ project_file=$script_dir/Unreal4DExample.uproject
 [ -f "$build_script" ] || die "Unix build script not found: $build_script"
 [ -f "$project_file" ] || die "Project descriptor not found: $project_file"
 
-engine_root=
-expect_engine_root=0
-for argument in "$@"; do
-    if [ "$expect_engine_root" -eq 1 ]; then
-        case "$argument" in
-            --*) die "--engine-root requires a path." ;;
-            *) engine_root=$argument ;;
+parse_arguments() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --engine-root|--target|--configuration)
+                [ "$#" -ge 2 ] || die "$1 requires a value."
+                case "$1" in
+                    --engine-root) engine_root=$2 ;;
+                    --target)
+                        case "$2" in
+                            Editor|editor|Game|game) ;;
+                            *) die "--target must be Editor or Game." ;;
+                        esac
+                        ;;
+                    --configuration)
+                        case "$2" in
+                            Development|DebugGame|Shipping) configuration=$2 ;;
+                            *) die "--configuration must be Development, DebugGame, or Shipping." ;;
+                        esac
+                        ;;
+                esac
+                shift 2
+                ;;
+            --skip-build) skip_build=1; shift ;;
+            --skip-project-files) shift ;;
+            --generate-only) generate_only=1; shift ;;
+            -h|--help)
+                printf 'Usage: %s [--engine-root PATH] [--target Editor|Game] [--configuration Development|DebugGame|Shipping] [--skip-project-files] [--generate-only] [--skip-build]\n' "$0"
+                exit 0
+                ;;
+            *) die "Unknown argument: $1" ;;
         esac
-        expect_engine_root=0
-        continue
-    fi
+    done
+}
+parse_arguments "$@"
 
-    case "$argument" in
-        --skip-build)
-            skip_build=1
-            ;;
-        --engine-root)
-            expect_engine_root=1
-            ;;
-    esac
-done
-
-if [ "$expect_engine_root" -eq 1 ]; then
-    die "--engine-root requires a path."
+if [ "$skip_build" -eq 1 ] && [ "$generate_only" -eq 1 ]; then
+    die "--skip-build and --generate-only cannot be used together."
 fi
 
 if [ -z "$engine_root" ]; then
@@ -68,6 +84,10 @@ if [ "$skip_build" -eq 0 ]; then
     "$build_script" "$@"
 fi
 
+if [ "$generate_only" -eq 1 ]; then
+    exit 0
+fi
+
 [ -d "$engine_root" ] ||
     die "Unreal Engine was not found at '$engine_root'. Pass --engine-root or set UNREAL_ENGINE_ROOT."
 engine_root=$(CDPATH= cd -P "$engine_root" && pwd)
@@ -76,4 +96,7 @@ editor=$engine_root/$editor_relative
 [ -x "$editor" ] || die "Unreal Editor was not found or is not executable: $editor"
 
 printf 'Opening Unreal4DExample in the Unreal Editor...\n'
+if [ "$configuration" = DebugGame ]; then
+    exec "$editor" "$project_file" -debug
+fi
 exec "$editor" "$project_file"

@@ -18,6 +18,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+if ($SkipBuild -and $GenerateOnly)
+{
+	throw "-SkipBuild and -GenerateOnly cannot be used together."
+}
+
 function Resolve-EngineRoot
 {
 	param([string]$RequestedRoot)
@@ -69,13 +74,23 @@ if (-not $SkipBuild)
 	& $BuildScript @BuildParameters
 }
 
+if ($GenerateOnly)
+{
+	return
+}
+
 if (-not (Test-Path -LiteralPath $Editor -PathType Leaf))
 {
 	throw "Unreal Editor was not found: $Editor"
 }
 
 Write-Host "Opening Unreal4DExample in the Unreal Editor..."
-& $Editor $ProjectFile
+$EditorArguments = @($ProjectFile)
+if ($Configuration -eq "DebugGame")
+{
+	$EditorArguments += "-debug"
+}
+& $Editor @EditorArguments
 if ($LASTEXITCODE -ne 0)
 {
 	throw "Unreal Editor exited with code $LASTEXITCODE."

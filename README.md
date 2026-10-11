@@ -75,7 +75,7 @@ If you do not wish to use the example project, you can skip steps 5 to 8.
     - `Build-macOS.command` can be double-clicked in Finder.
     - `Build-Unix.sh` contains the shared implementation and can be invoked directly from a terminal or another build script.
 5. To build and open the example in the Unreal Editor in one step, run `Run-macOS.command` on macOS or `Run-Linux.sh` on Linux.
-    - The run scripts accept the same arguments as their corresponding build scripts.
+    - The run scripts accept the example project's build arguments.
     - Pass `--skip-build` to open the existing editor build without rebuilding.
     - `Run-macOS.command` can be double-clicked in Finder.
 
