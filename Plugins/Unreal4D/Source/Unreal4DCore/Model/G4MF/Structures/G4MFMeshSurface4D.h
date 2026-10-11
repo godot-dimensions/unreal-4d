@@ -6,7 +6,7 @@
 
 class UArrayTetraMesh4D;
 class UMaterial4D;
-class UMesh4D;
+class USingleSurfaceMesh4D;
 
 // UG4MFMeshSurface4D is a class for 4D mesh surfaces in the G4MF format.
 // A mesh surface is a collection of vertices, edges, and cells that define
@@ -47,7 +47,7 @@ public:
 	TArray<int32> LoadEdgeIndices(const UG4MFState4D* InG4MFState) const;
 
 	UArrayTetraMesh4D* ImportGenerateTetraMeshSurface(const UG4MFState4D* InG4MFState, const TArray<FVector4>& InVertexValues, UObject* InOuter, const EObjectFlags InObjectFlags = RF_NoFlags) const;
-	static UG4MFMeshSurface4D* ExportConvertMeshSurfaceForState(UG4MFState4D* InG4MFState, UMesh4D* InMesh, const bool InDeduplicate = true);
+	static UG4MFMeshSurface4D* ExportConvertMeshSurfaceForState(UG4MFState4D* InG4MFState, USingleSurfaceMesh4D* InMesh, const bool InDeduplicate = true);
 
 	static UG4MFMeshSurface4D* FromJson(UG4MFState4D* InG4MFState, const FJsonObject* InJson);
 	TSharedPtr<FJsonObject> ToJson() const;

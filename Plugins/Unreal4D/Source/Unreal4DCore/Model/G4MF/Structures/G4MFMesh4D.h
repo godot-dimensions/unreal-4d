@@ -4,6 +4,8 @@
 
 #include "G4MFMesh4D.generated.h"
 
+class UMesh4D;
+
 // UG4MFMesh4D is a class for 4D meshes in the G4MF format. It is used to represent
 // visual geometry found in a G4MF scene. It may be attached to G4MF nodes using a
 // UG4MFMeshInstance4D so that it may be rendered in Unreal at the node's 4D transform.

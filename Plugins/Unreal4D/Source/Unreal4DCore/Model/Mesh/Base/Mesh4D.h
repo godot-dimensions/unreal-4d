@@ -8,7 +8,7 @@
 
 DECLARE_MULTICAST_DELEGATE(FOnMesh4DCacheCleared);
 
-UCLASS(BlueprintType, Category = "Unreal 4D|Mesh")
+UCLASS(Abstract, BlueprintType, Category = "Unreal 4D|Mesh")
 class UNREAL4DCORE_API UMesh4D : public UObject
 {
 	GENERATED_BODY()
@@ -26,9 +26,6 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Unreal 4D|Mesh")
 	FVector4 LocalExtents = FVector4::Zero();
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unreal 4D|Mesh")
-	UMaterial4D* Material = nullptr;
 
 	bool bIsMeshDataValid = false;
 
@@ -57,7 +54,7 @@ protected:
 	 */
 	virtual FTetraMesh4DRenderResourcePtr CreateRenderResource();
 
-	virtual void CalculateLocalBounds(FVector4& OutOrigin, FVector4& OutExtents) const;
+	virtual void CalculateLocalBounds(FVector4& OutOrigin, FVector4& OutExtents) const PURE_VIRTUAL(UMesh4D::CalculateLocalBounds, OutOrigin = FVector4::Zero(); OutExtents = FVector4::Zero(););
 
 public:
 	bool IsMeshDataValid();
@@ -65,17 +62,9 @@ public:
 	void MeshClearCaches();
 
 	virtual void ValidateMaterialForMesh(UMaterial4D* InMaterial);
-	UMaterial4D* GetMaterial() const;
-	void SetMaterial(UMaterial4D* InMaterial);
-	virtual UMaterial4D* GetFallbackMaterial() const;
 
 	void GetLocalBounds(FVector4& OutOrigin, FVector4& OutExtents) const;
 	void UpdateLocalBounds();
-
-	// Data which is sampled by indices.
-	virtual const TArray<FVector4>& GetVertexValues() const;
-	virtual const TArray<FVector4>& GetNormalValues() const;
-	virtual const TArray<FVector>& GetTextureMapValues() const;
 
 	virtual bool ValidateMeshData();
 

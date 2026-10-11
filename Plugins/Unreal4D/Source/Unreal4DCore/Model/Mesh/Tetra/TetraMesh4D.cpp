@@ -442,7 +442,7 @@ void UTetraMesh4D::ValidateMaterialForMesh(UMaterial4D* InMaterial)
 			InMaterial->ResizeAlbedoColorArray(cellCount);
 		}
 	}
-	UMesh4D::ValidateMaterialForMesh(InMaterial);
+	Super::ValidateMaterialForMesh(InMaterial);
 }
 
 UTetraMaterial4D* UTetraMesh4D::FallbackMaterial = nullptr;

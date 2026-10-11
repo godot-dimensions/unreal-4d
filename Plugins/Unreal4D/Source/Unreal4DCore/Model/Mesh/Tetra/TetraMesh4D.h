@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../../Math/RaycastResult4D.h"
-#include "../Base/Mesh4D.h"
+#include "../Base/SingleSurfaceMesh4D.h"
 
 #include "TetraMaterial4D.h"
 #include "TetraMesh4D.generated.h"
@@ -9,7 +9,7 @@
 class UArrayTetraMesh4D;
 
 UCLASS(BlueprintType, Category = "Unreal 4D|Mesh|Tetra")
-class UNREAL4DCORE_API UTetraMesh4D : public UMesh4D
+class UNREAL4DCORE_API UTetraMesh4D : public USingleSurfaceMesh4D
 {
 	GENERATED_BODY()
 

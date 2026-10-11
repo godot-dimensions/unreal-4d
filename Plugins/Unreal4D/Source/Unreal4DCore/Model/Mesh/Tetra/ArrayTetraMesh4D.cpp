@@ -299,15 +299,17 @@ void UArrayTetraMesh4D::MergeWith(UArrayTetraMesh4D* InOther, const FTransform4D
 bool UArrayTetraMesh4D::OverwriteFromOtherMesh(UMesh4D* InFromMesh)
 {
 	if (InFromMesh == nullptr || InFromMesh == this) { return false; }
+	USingleSurfaceMesh4D* singleSurfaceMesh = Cast<USingleSurfaceMesh4D>(InFromMesh);
+	if (singleSurfaceMesh == nullptr) { return false; }
 	// This function is currently only called by the import code, and expects the passed-in
 	// mesh to not be modified by other threads, so the InFromMesh is not completely locked.
 	// If this becomes a problem in the future we could add some more locking complexity here.
 	FScopeLock ScopeLock(&ArrayMeshModifyOrCacheLock);
-	// All meshes have values.
-	VertexValues = InFromMesh->GetVertexValues();
-	NormalValues = InFromMesh->GetNormalValues();
-	TextureMapValues = InFromMesh->GetTextureMapValues();
-	Material = InFromMesh->GetMaterial();
+	// Single-surface meshes have values and a material.
+	VertexValues = singleSurfaceMesh->GetVertexValues();
+	NormalValues = singleSurfaceMesh->GetNormalValues();
+	TextureMapValues = singleSurfaceMesh->GetTextureMapValues();
+	Material = singleSurfaceMesh->GetMaterial();
 	// Tetra meshes define how tetrahedra use those values.
 	UTetraMesh4D* inputTetraMesh = Cast<UTetraMesh4D>(InFromMesh);
 	if (inputTetraMesh != nullptr)

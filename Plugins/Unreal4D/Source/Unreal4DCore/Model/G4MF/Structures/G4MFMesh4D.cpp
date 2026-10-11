@@ -141,7 +141,13 @@ UMesh4D* UG4MFMesh4D::ImportGenerateMesh(const UG4MFState4D* InG4MFState, UObjec
 int32 UG4MFMesh4D::ExportConvertMeshIntoState(UG4MFState4D* InG4MFState, UMesh4D* InMesh, const bool bInDeduplicate)
 {
 	if (!IsValid(InG4MFState) || !IsValid(InMesh)) { return -1; }
-	const TArray<FVector4> vertices = InMesh->GetVertexValues();
+	USingleSurfaceMesh4D* singleSurfaceMesh = Cast<USingleSurfaceMesh4D>(InMesh);
+	if (singleSurfaceMesh == nullptr)
+	{
+		UE_LOG(LogUnreal4DCore, Warning, TEXT("UG4MFMesh4D: Only a USingleSurfaceMesh4D can be converted to a G4MF mesh: '%s'."), *InMesh->GetPathName());
+		return -1;
+	}
+	const TArray<FVector4> vertices = singleSurfaceMesh->GetVertexValues();
 	if (vertices.IsEmpty())
 	{
 		UE_LOG(LogUnreal4DCore, Warning, TEXT("UG4MFMesh4D: Mesh has no vertices, cannot convert to G4MF mesh."));
@@ -153,7 +159,7 @@ int32 UG4MFMesh4D::ExportConvertMeshIntoState(UG4MFState4D* InG4MFState, UMesh4D
 		UE_LOG(LogUnreal4DCore, Warning, TEXT("UG4MFMesh4D: Failed to encode vertices into UG4MFState4D."));
 		return -1;
 	}
-	UG4MFMeshSurface4D* surface = UG4MFMeshSurface4D::ExportConvertMeshSurfaceForState(InG4MFState, InMesh, bInDeduplicate);
+	UG4MFMeshSurface4D* surface = UG4MFMeshSurface4D::ExportConvertMeshSurfaceForState(InG4MFState, singleSurfaceMesh, bInDeduplicate);
 	if (!IsValid(surface))
 	{
 		UE_LOG(LogUnreal4DCore, Warning, TEXT("UG4MFMesh4D: Failed to convert the mesh surface."));

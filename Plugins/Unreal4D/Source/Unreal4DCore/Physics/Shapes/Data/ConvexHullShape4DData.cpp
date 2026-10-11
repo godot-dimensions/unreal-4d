@@ -29,7 +29,13 @@ UTetraMesh4D* UConvexHullShape4DData::ToTetraMesh() const
 UConvexHullShape4DData* UConvexHullShape4DData::CreateFromMesh(UMesh4D* InMesh)
 {
 	UConvexHullShape4DData* shape = NewObject<UConvexHullShape4DData>();
-	shape->SetPoints(InMesh->GetVertexValues());
+	const USingleSurfaceMesh4D* singleSurfaceMesh = Cast<USingleSurfaceMesh4D>(InMesh);
+	if (singleSurfaceMesh == nullptr)
+	{
+		UE_LOG(LogUnreal4DCore, Error, TEXT("UConvexHullShape4DData::CreateFromMesh: Unhandled mesh type: '%s'."), *GetPathNameSafe(InMesh));
+		return shape;
+	}
+	shape->SetPoints(singleSurfaceMesh->GetVertexValues());
 	UE_LOG(LogUnreal4DCore, Warning, TEXT("UConvexHullShape4DData::CreateFromMesh: Calculating the convex hull from mesh vertices is not implemented yet."));
 	return shape;
 }

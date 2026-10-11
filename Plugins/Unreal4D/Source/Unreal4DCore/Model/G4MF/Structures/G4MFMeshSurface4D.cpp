@@ -155,7 +155,7 @@ UArrayTetraMesh4D* UG4MFMeshSurface4D::ImportGenerateTetraMeshSurface(const UG4M
 	return ret;
 }
 
-UG4MFMeshSurface4D* UG4MFMeshSurface4D::ExportConvertMeshSurfaceForState(UG4MFState4D* InG4MFState, UMesh4D* InMesh, const bool bInDeduplicate)
+UG4MFMeshSurface4D* UG4MFMeshSurface4D::ExportConvertMeshSurfaceForState(UG4MFState4D* InG4MFState, USingleSurfaceMesh4D* InMesh, const bool bInDeduplicate)
 {
 	if (InG4MFState == nullptr || InMesh == nullptr) { return nullptr; }
 	const FName desiredName = FName(InMesh->GetName());
