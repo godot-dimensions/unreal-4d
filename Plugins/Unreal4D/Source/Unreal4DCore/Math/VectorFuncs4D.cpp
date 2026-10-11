@@ -125,6 +125,13 @@ double UVectorFuncs4D::Vector4_Dot(const FVector4& InA, const FVector4& InB)
 	return Dot4(InA, InB);
 }
 
+// Normalizes all four components, returning zero when squared length is at most UE_SMALL_NUMBER.
+FVector4 UVectorFuncs4D::Vector4_GetSafeNormal(const FVector4& InVector)
+{
+	const float sizeSquared = Dot4(InVector, InVector);
+	return (sizeSquared > UE_SMALL_NUMBER) ? Vector4_Normalized(InVector) : FVector4::Zero();
+}
+
 bool UVectorFuncs4D::Vector4_IsUniform(const FVector4& InVector)
 {
 	return FMath::IsNearlyEqual(InVector.X, InVector.Y, UNREAL4D_COMPARISON_EPSILON) &&

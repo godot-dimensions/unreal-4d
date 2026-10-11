@@ -62,6 +62,8 @@ public:
 	static double Vector4_DistanceSquared(const FVector4& InA, const FVector4& InB);
 	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Math|Vector", meta = (ScriptName = "Dot"))
 	static double Vector4_Dot(const FVector4& InA, const FVector4& InB);
+	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Math|Vector", meta = (ScriptName = "GetSafeNormal"))
+	static FVector4 Vector4_GetSafeNormal(const FVector4& InVector);
 	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Math|Vector", meta = (ScriptName = "IsUniform"))
 	static bool Vector4_IsUniform(const FVector4& InVector);
 	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Math|Vector", meta = (ScriptName = "Lerp"))

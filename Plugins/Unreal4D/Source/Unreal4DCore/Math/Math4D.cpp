@@ -253,3 +253,12 @@ int32 UMath4D::FindCommonInt32(const TArray<int32>& InA, const TArray<int32>& In
 	}
 	return INT32_MIN;
 }
+
+double UMath4D::SafeDivide(const double InA, const double InB, const double InFallback)
+{
+	if (FMath::IsNearlyZero(InB))
+	{
+		return InFallback;
+	}
+	return InA / InB;
+}
