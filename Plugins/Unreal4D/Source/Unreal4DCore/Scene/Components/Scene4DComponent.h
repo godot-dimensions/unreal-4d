@@ -62,6 +62,9 @@ public:
 	UPROPERTY(Transient, BlueprintAssignable, DuplicateTransient, NonTransactional, SkipSerialization, Category="Unreal 4D|Component|Visibility")
 	FOnVisibilityChanged4D OnVisibilityChanged4D;
 
+	// Enabled by default. Projects may disable this to suppress errors for non-4D parents.
+	static bool bReportNon4DParentErrors;
+
 	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Component")
 	UScene4DComponent* GetParent4DComponent() const;
 

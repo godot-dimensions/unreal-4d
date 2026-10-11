@@ -3,6 +3,8 @@
 #include "../../Render/RenderingServer4D.h"
 #include "Engine/World.h"
 
+bool UScene4DComponent::bReportNon4DParentErrors = true;
+
 UScene4DComponent::UScene4DComponent(const FObjectInitializer& Init)
 	: Super(Init)
 {
@@ -20,8 +22,11 @@ UScene4DComponent* UScene4DComponent::GetParent4DComponent() const
 	UScene4DComponent* parent4D = Cast<UScene4DComponent>(parent);
 	if (parent4D == nullptr)
 	{
-		// Print an error.
-		UE_LOG(LogUnreal4DCore, Error, TEXT("UScene4DComponent: Attachment parent is not a UScene4DComponent."));
+		if (bReportNon4DParentErrors)
+		{
+			UE_LOG(LogUnreal4DCore, Error, TEXT("UScene4DComponent::GetParent4DComponent: Component '%s' has attachment parent '%s', which is not a UScene4DComponent."), *GetPathName(), *parent->GetPathName());
+		}
+		// A non-4D parent is treated the same as no parent: this is the root of the 4D hierarchy.
 		return nullptr;
 	}
 	return parent4D;
