@@ -76,14 +76,12 @@ FVector4 FBivector4D::LargestAxis() const {
 }
 
 void FBivector4D::Eigenvalues(double& OutLargerEigenvalue, double& OutSmallerEigenvalue) const {
-	// B | B.Dual = +-2ab
-	// B | B = a^2+b^2
-	double size = SizeSquared();
-	double chirality = FMath::Abs(*this | Dual());
-	double sqrtPlus = FMath::Sqrt(size + chirality);
-	double sqrtMinus = FMath::Sqrt(size - chirality);
-	OutLargerEigenvalue = (sqrtPlus + sqrtMinus)/2;
-	OutSmallerEigenvalue = (sqrtPlus - sqrtMinus)/2;
+	// Dual-part lengths avoid cancellation in size squared minus chirality.
+	const FBivector4D dual = Dual();
+	const double selfDualSize = (*this + dual).Size();
+	const double antiSelfDualSize = (*this - dual).Size();
+	OutLargerEigenvalue = (selfDualSize + antiSelfDualSize) / (2.0 * UE_DOUBLE_SQRT_2);
+	OutSmallerEigenvalue = FMath::Abs(selfDualSize - antiSelfDualSize) / (2.0 * UE_DOUBLE_SQRT_2);
 }
 
 FVector4 operator*(const FVector4& InVector, const FBivector4D& InBivector)
