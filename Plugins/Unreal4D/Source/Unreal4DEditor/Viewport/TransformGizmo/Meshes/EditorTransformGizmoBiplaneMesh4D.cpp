@@ -1,6 +1,8 @@
 #include "EditorTransformGizmoBiplaneMesh4D.h"
 
 #include "BaseGizmos/GizmoRenderingUtil.h"
+#include "MeshElementCollector.h"
+#include "PrimitiveDrawInterface.h"
 
 void UEditorTransformGizmoBiplaneMesh4D::SetSecondaryColors(const FLinearColor& InSecondaryNormalColor, const FLinearColor& InSecondaryHighlightColor)
 {

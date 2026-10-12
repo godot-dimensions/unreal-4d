@@ -7,6 +7,7 @@
 #include "EditorTransformGizmo4DFactory.generated.h"
 
 class UScene4DComponent;
+class FEditorViewportClient;
 
 // A factory class which creates the 4D transform gizmo using the registered builder.
 // Both classes are required for integration in Unreal's interactive tools framework.

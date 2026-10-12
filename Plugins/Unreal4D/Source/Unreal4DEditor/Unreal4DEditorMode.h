@@ -64,6 +64,7 @@ public:
 	static FLinearColor GetAxisColor(const EAxis4D InAxis);
 
 	// FEdMode interface.
+	virtual void Exit() override;
 	virtual void Tick(FEditorViewportClient* InViewportClient, float InDeltaTime) override;
 	virtual bool InputKey(FEditorViewportClient* ViewportClient, FViewport* InViewport, FKey InKey, EInputEvent InEvent) override;
 	virtual bool InputAxis(FEditorViewportClient* InViewportClient, FViewport* InViewport, int32 InControllerId, FKey InKey, float InDelta, float InDeltaTime) override;

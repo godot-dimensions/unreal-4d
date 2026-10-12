@@ -1,6 +1,8 @@
 #include "EditorTransformGizmoBivectorRingMesh4D.h"
 
 #include "BaseGizmos/GizmoRenderingUtil.h"
+#include "MeshElementCollector.h"
+#include "PrimitiveDrawInterface.h"
 
 void UEditorTransformGizmoBivectorRingMesh4D::SetSecondaryColors(const FLinearColor& InSecondaryNormalColor, const FLinearColor& InSecondaryHighlightColor)
 {

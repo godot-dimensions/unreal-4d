@@ -85,6 +85,20 @@ FLinearColor FUnreal4DEditorMode::GetAxisColor(const EAxis4D InAxis) {
 	return UVectorFuncs4D::Vector4_AxisColor(InAxis);
 }
 
+void FUnreal4DEditorMode::Exit()
+{
+	if (GEditor != nullptr)
+	{
+		// Only visit live viewport clients; a previously registered viewport may have been closed.
+		for (FLevelEditorViewportClient* viewportClient : GEditor->GetLevelViewportClients())
+		{
+			viewportClient->OnDropElementTransformUpdated().RemoveAll(this);
+		}
+	}
+	_levelViewportClientsWithRegisteredSignals.Empty();
+	FEdMode::Exit();
+}
+
 void FUnreal4DEditorMode::Tick(FEditorViewportClient* InViewportClient, float InDeltaTime)
 {
 	FEdMode::Tick(InViewportClient, InDeltaTime);

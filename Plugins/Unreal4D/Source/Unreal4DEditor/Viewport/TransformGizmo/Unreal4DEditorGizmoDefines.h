@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../Unreal4DEditorDefines.h"
+#include "UnrealWidgetFwd.h"
 
 #include "Unreal4DEditorGizmoDefines.generated.h"
 

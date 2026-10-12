@@ -1,6 +1,8 @@
 #include "EditorTransformGizmoDiscMesh4D.h"
 
 #include "BaseGizmos/GizmoRenderingUtil.h"
+#include "MeshElementCollector.h"
+#include "PrimitiveDrawInterface.h"
 
 // This proxy class is required for integration with Unreal's threaded rendering system.
 class FEditorTransformGizmoDiscMeshSceneProxy4D : public FEditorTransformGizmoBaseMeshSceneProxy4D

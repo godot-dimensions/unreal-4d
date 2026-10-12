@@ -3,6 +3,7 @@
 #include "Unreal4DEditorGizmoDefines.h"
 
 #include "Templates/UniquePtr.h"
+#include "ScopedTransaction.h"
 
 #include "../../../Unreal4DCore/Scene/Components/Scene4DComponent.h"
 #include "EditorTransformSnapSettings4D.h"

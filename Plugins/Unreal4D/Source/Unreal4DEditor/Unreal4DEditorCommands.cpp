@@ -1,5 +1,8 @@
 #include "Unreal4DEditorCommands.h"
 
+#include "EditorViewportClient.h"
+#include "Styling/AppStyle.h"
+
 #define LOCTEXT_NAMESPACE "Unreal4DEditorCommands"
 
 TArray<FUnreal4DRemovedCommandAndChord> FUnreal4DEditorCommands::_removedNavChords;

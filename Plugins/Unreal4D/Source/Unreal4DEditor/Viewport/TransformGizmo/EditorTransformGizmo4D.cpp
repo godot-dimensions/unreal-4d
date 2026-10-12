@@ -18,6 +18,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "InteractiveGizmoManager.h"
 #include "InputState.h"
+#include "Settings/LevelEditorViewportSettings.h"
 #include "UnrealEdGlobals.h"
 
 TWeakObjectPtr<UEditorTransformGizmo4D> UEditorTransformGizmo4D::_activeGizmo = nullptr;

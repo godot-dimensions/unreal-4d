@@ -8,6 +8,7 @@
 
 #include "BlueprintEditor.h"
 #include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
 #include "SLevelViewport.h"
 #include "SSCSEditorViewport.h"
 
