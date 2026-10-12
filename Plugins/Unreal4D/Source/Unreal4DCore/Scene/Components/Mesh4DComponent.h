@@ -58,6 +58,8 @@ private:
 	void UnbindMesh4DDelegate();
 
 protected:
+	virtual UMesh4D* GetCollisionMesh4D() const;
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif // WITH_EDITOR
@@ -82,6 +84,7 @@ public:
 	virtual int32 GetNumMaterials() const override;
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	virtual bool QueryPointCollision(const FVector4& InPoint, FCollisionManifold4D& OutCollision) const override;
 
 	/** Refreshes the camera-relative bounds used by Unreal's renderer and the projection component. */
 	virtual void UpdateBoundsForCamera(const FTransform4D& InCameraTransform4D, const FTransform& InCameraTransform3D);
@@ -101,6 +104,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mesh 4D")
 	TObjectPtr<UMesh4D> Mesh4D = nullptr;
+
+	// Enables 4D point queries against this mesh, independently of 3D collision.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unreal 4D|Physics|Mesh")
+	bool EnableCollision = false;
+
+	// Optional mesh used for 4D collision instead of the rendered mesh.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unreal 4D|Physics|Mesh", meta = (EditCondition = "EnableCollision", EditConditionHides = true))
+	TObjectPtr<UMesh4D> CollisionMesh4D = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Unreal 4D|Component|Mesh|Material")
 	TObjectPtr <UMaterialInterface> Material = nullptr;

@@ -1,11 +1,14 @@
 #pragma once
 
 #include "PhysicsEngine4D.h"
+#include "../CollisionManifold4D.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "PhysicsServer4D.generated.h"
 
 constexpr double PHYSICS_4D_SAFE_MARGIN = 0.000000000001;
+
+class UPrimitive4DComponent;
 
 UENUM()
 enum class EPhysicsTickPolicy4D : uint8
@@ -34,9 +37,17 @@ private:
 	TObjectPtr<UPhysicsEngine4D> _currentPhysicsEngine = nullptr;
 	FName _currentPhysicsEngineName = NAME_None;
 
-	// These are scoped to the things that exist in the UWorld.
-	TArray<UArea4DComponent*> _areaComponents;
-	TArray<UPhysicsBody4DComponent*> _physicsBodyComponents;
+	// These 3 transient arrays are scoped to the things that exist in the UWorld.
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<UArea4DComponent>> _areaComponents;
+
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> _physicsBodyComponents;
+
+	// Primitives are all non-body things that can participate in physics,
+	// including meshes (UMesh4DComponent) and shapes (UShape4DComponent).
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<UPrimitive4DComponent>> _primitiveColliders;
 
 	UPhysicsEngine4D* GetPhysicsEngine(const FName& InName) const;
 
@@ -72,6 +83,13 @@ public:
 	FKinematicCollision4D MoveAndCollide(UPhysicsBody4DComponent* InBodyNode, FVector4 InMotion, bool InTestOnly = false, double InDeltaTime = -1.0);
 	void MoveArea(UArea4DComponent* InAreaComponent, FVector4 InMotion);
 
+	void RegisterCollider(UPrimitive4DComponent* InCollider);
+	void UnregisterCollider(UPrimitive4DComponent* InCollider);
+
+	// Appends hits from registered 4D colliders. InAny stops after the first hit.
+	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Physics|Server")
+	bool QueryPointCollision(const FVector4& InPoint, TArray<FCollisionManifold4D>& OutCollisions, const bool InAny = false) const;
+
 	void RegisterArea(UArea4DComponent* InAreaComponent);
 	void UnregisterArea(UArea4DComponent* InAreaComponent);
 
@@ -86,8 +104,10 @@ public:
 	FName GetCurrentPhysicsEngineName() const;
 	void SetCurrentPhysicsEngineName(const FName& InName);
 
-	TArray<UArea4DComponent*> GetAreaComponents() const;
-	TArray<UPhysicsBody4DComponent*> GetPhysicsBodyComponents() const;
+	// Return snapshots so registration changes during callbacks do not invalidate iteration.
+	// Resolve each weak reference before use; components may have been destroyed since the snapshot.
+	TArray<TWeakObjectPtr<UArea4DComponent>> GetAreaComponents() const;
+	TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> GetPhysicsBodyComponents() const;
 
 	UCollisionObject4DComponent* GetOrCreateWorldStaticBody();
 };

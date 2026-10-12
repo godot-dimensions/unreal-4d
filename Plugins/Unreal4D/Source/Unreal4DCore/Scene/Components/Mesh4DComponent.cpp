@@ -4,6 +4,8 @@
 
 #include "../../Model/Mesh/Tetra/TetraMesh4D.h"
 #include "../../Render/RenderingServer4D.h"
+#include "../../Physics/Server/PhysicsServer4D.h"
+#include "../../Math/Geometry4D.h"
 #include "Unreal4DRendering/Rasterization/TetraMesh4DComponentGPUSceneProxy.h"
 
 #include "GameFramework/Actor.h"
@@ -328,6 +330,10 @@ void UMesh4DComponent::OnRegister()
 		{
 			Server->RegisterMesh(this);
 		}
+		if (UPhysicsServer4DWorldSubsystem* Server = World->GetSubsystem<UPhysicsServer4DWorldSubsystem>())
+		{
+			Server->RegisterCollider(this);
+		}
 	}
 
 	BindMesh4DDelegate();
@@ -346,6 +352,10 @@ void UMesh4DComponent::OnUnregister()
 		if (URenderingServer4D* Server = World->GetSubsystem<URenderingServer4D>())
 		{
 			Server->UnregisterMesh(this);
+		}
+		if (UPhysicsServer4DWorldSubsystem* Server = World->GetSubsystem<UPhysicsServer4DWorldSubsystem>())
+		{
+			Server->UnregisterCollider(this);
 		}
 	}
 
@@ -511,6 +521,41 @@ void UMesh4DComponent::UpdateCachedBoundsTransform(const FTransform4D& CameraTra
 	BoundsTransform.SetScale3D(FVector(SliceScale));
 
 	CachedBoundsTransform = BoundsTransform;
+}
+
+UMesh4D* UMesh4DComponent::GetCollisionMesh4D() const
+{
+	return EnableCollision ? (CollisionMesh4D ? CollisionMesh4D : Mesh4D) : nullptr;
+}
+
+bool UMesh4DComponent::QueryPointCollision(const FVector4& InPoint, FCollisionManifold4D& OutCollision) const
+{
+	UTetraMesh4D* collisionMesh = Cast<UTetraMesh4D>(GetCollisionMesh4D());
+	if (collisionMesh == nullptr || !collisionMesh->IsMeshDataValid())
+	{
+		return false;
+	}
+	const FTransform4D transform = GetGlobalTransform4D();
+	const FVector4 pointLocal = transform.InverseTransformPosition(InPoint);
+	FVector4 boundsOrigin;
+	FVector4 boundsExtents;
+	collisionMesh->GetLocalBounds(boundsOrigin, boundsExtents);
+	if (!UGeometry4D::BoxContains(boundsOrigin, boundsExtents, pointLocal))
+	{
+		return false;
+	}
+	FVector4 nearestPoint;
+	int32 nearestTetra;
+	const double distance = collisionMesh->GetSignedDistanceToMesh(pointLocal, nearestPoint, nearestTetra);
+	if (!FMath::IsFinite(distance) || distance > 0.0)
+	{
+		return false;
+	}
+	OutCollision.ColliderPrimitive = const_cast<UMesh4DComponent*>(this);
+	OutCollision.Point = transform.TransformPosition(nearestPoint);
+	OutCollision.Normal = (OutCollision.Point - InPoint).GetSafeNormal();
+	OutCollision.Penetration = static_cast<float>(distance);
+	return true;
 }
 
 UMesh4D* UMesh4DComponent::GetMesh4DForProjection() const

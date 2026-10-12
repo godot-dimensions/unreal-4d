@@ -1,5 +1,10 @@
 #include "Primitive4DComponent.h"
 
+bool UPrimitive4DComponent::QueryPointCollision(const FVector4& InPoint, FCollisionManifold4D& OutCollision) const
+{
+	return false;
+}
+
 // Raycasting.
 
 FRaycastResult4D UPrimitive4DComponent::RaycastIntersectsLocal4D(const FVector4& InLocalRayOrigin, const FVector4& InLocalRayDirection, const double InMaxDistance, const bool bInInsideIsZero)

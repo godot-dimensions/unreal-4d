@@ -95,14 +95,14 @@ FKinematicCollision4D UAxisAlignedBoxPhysicsEngine4D::CheckMotionUntilObstacle(U
 	// Get information about bodies.
 	const TArray<UShape4DComponent*>& movingShapes = InMovingBody->GetCollisionShapes();
 	UPhysicsServer4DWorldSubsystem* physicsServer4D = InMovingBody->GetWorld()->GetSubsystem<UPhysicsServer4DWorldSubsystem>();
-	const TArray<UPhysicsBody4DComponent*>& obstacleBodyComponents = physicsServer4D->GetPhysicsBodyComponents();
+	const TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> obstacleBodyComponents = physicsServer4D->GetPhysicsBodyComponents();
 	const int obstacleBodyCount = obstacleBodyComponents.Num();
 	// Calculate the ratio of the desired motion that can be taken before hitting an obstacle.
 	double travelRatio = 1.0;
 	FVector4 outNormal;
 	for (int obstacleBodyIndex = 0; obstacleBodyIndex < obstacleBodyCount; obstacleBodyIndex++)
 	{
-		UPhysicsBody4DComponent* obstacleBodyComponent = Cast<UPhysicsBody4DComponent>(obstacleBodyComponents[obstacleBodyIndex]);
+		UPhysicsBody4DComponent* obstacleBodyComponent = obstacleBodyComponents[obstacleBodyIndex].Get();
 		if (obstacleBodyComponent == nullptr)
 		{
 			continue;
@@ -173,7 +173,7 @@ TSet<UArea4DComponent*> UAxisAlignedBoxPhysicsEngine4D::StepDynamicRigidBody(UDy
 	const FVector4 startGlobalPosition = InMovingBody->GetGlobalPosition4D();
 	// Used for determining overlaps with UArea4DComponents.
 	UPhysicsServer4DWorldSubsystem* physicsServer4D = InMovingBody->GetWorld()->GetSubsystem<UPhysicsServer4DWorldSubsystem>();
-	const TArray<UArea4DComponent*>& areaComponents = physicsServer4D->GetAreaComponents();
+	const TArray<TWeakObjectPtr<UArea4DComponent>> areaComponents = physicsServer4D->GetAreaComponents();
 	const int areaCount = areaComponents.Num();
 	TSet<UArea4DComponent*> overlappingAreas;
 	// Calculate the motion.
@@ -221,7 +221,11 @@ TSet<UArea4DComponent*> UAxisAlignedBoxPhysicsEngine4D::StepDynamicRigidBody(UDy
 			// Check for overlaps with areas.
 			for (int areaIndex = 0; areaIndex < areaCount; areaIndex++)
 			{
-				UArea4DComponent* areaComponent = Cast<UArea4DComponent>(areaComponents[areaIndex]);
+				UArea4DComponent* areaComponent = areaComponents[areaIndex].Get();
+				if (areaComponent == nullptr)
+				{
+					continue;
+				}
 				if (overlappingAreas.Contains(areaComponent))
 				{
 					continue; // Already overlapping, no need to check again.
@@ -273,10 +277,14 @@ FKinematicCollision4D UAxisAlignedBoxPhysicsEngine4D::MoveAndCollide(UPhysicsBod
 	TArray<FRect4D> movingRectsAfter = CalculateShapeRects(movingShapes);
 	// Check for overlaps with areas.
 	UPhysicsServer4DWorldSubsystem* physicsServer4D = InMovingBody->GetWorld()->GetSubsystem<UPhysicsServer4DWorldSubsystem>();
-	const TArray<UArea4DComponent*>& areaComponents = physicsServer4D->GetAreaComponents();
+	const TArray<TWeakObjectPtr<UArea4DComponent>> areaComponents = physicsServer4D->GetAreaComponents();
 	for (int areaIndex = 0; areaIndex < areaComponents.Num(); areaIndex++)
 	{
-		UArea4DComponent* areaComponent = Cast<UArea4DComponent>(areaComponents[areaIndex]);
+		UArea4DComponent* areaComponent = areaComponents[areaIndex].Get();
+		if (areaComponent == nullptr)
+		{
+			continue;
+		}
 		const TArray<UShape4DComponent*> staticShapes = areaComponent->GetCollisionShapes();
 		const TArray<FRect4D>& staticRects = GetBodyShapeRects(areaComponent, staticShapes);
 		if (DoMovingShapesOverlap(movingRectsBefore, movingShapes, staticRects, staticShapes, InMotion* travelRatio, false))
@@ -308,10 +316,14 @@ void UAxisAlignedBoxPhysicsEngine4D::MoveArea(UArea4DComponent* InMovingArea, co
 	TArray<FRect4D> movingRectsAfter = CalculateShapeRects(movingShapes);
 	// Check for overlaps with bodies and other areas.
 	UPhysicsServer4DWorldSubsystem* physicsServer4D = InMovingArea->GetWorld()->GetSubsystem<UPhysicsServer4DWorldSubsystem>();
-	const TArray<UArea4DComponent*>& areaComponents = physicsServer4D->GetAreaComponents();
+	const TArray<TWeakObjectPtr<UArea4DComponent>> areaComponents = physicsServer4D->GetAreaComponents();
 	for (int areaIndex = 0; areaIndex < areaComponents.Num(); areaIndex++)
 	{
-		UArea4DComponent* staticAreaComponent = Cast<UArea4DComponent>(areaComponents[areaIndex]);
+		UArea4DComponent* staticAreaComponent = areaComponents[areaIndex].Get();
+		if (staticAreaComponent == nullptr)
+		{
+			continue;
+		}
 		if (staticAreaComponent == InMovingArea)
 		{
 			continue; // Don't collide with ourself.
@@ -334,10 +346,14 @@ void UAxisAlignedBoxPhysicsEngine4D::MoveArea(UArea4DComponent* InMovingArea, co
 			}
 		}
 	}
-	const TArray<UPhysicsBody4DComponent*>& bodyComponents = physicsServer4D->GetPhysicsBodyComponents();
+	const TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> bodyComponents = physicsServer4D->GetPhysicsBodyComponents();
 	for (int bodyIndex = 0; bodyIndex < bodyComponents.Num(); bodyIndex++)
 	{
-		UPhysicsBody4DComponent* staticBodyNode = Cast<UPhysicsBody4DComponent>(bodyComponents[bodyIndex]);
+		UPhysicsBody4DComponent* staticBodyNode = bodyComponents[bodyIndex].Get();
+		if (staticBodyNode == nullptr)
+		{
+			continue;
+		}
 		const TArray<UShape4DComponent*> staticBodyShapes = staticBodyNode->GetCollisionShapes();
 		const TArray<FRect4D>& staticBodyRects = GetBodyShapeRects(staticBodyNode, staticBodyShapes);
 		if (DoMovingShapesOverlap(movingRectsBefore, movingShapes, staticBodyRects, staticBodyShapes, InMotion, true))
@@ -365,16 +381,24 @@ void UAxisAlignedBoxPhysicsEngine4D::PhysicsProcess(const double InDeltaTime)
 	// Recalculate rects for all areas and bodies each frame, just in case they changed.
 	_areaAndBodyRects.Empty();
 	UPhysicsServer4DWorldSubsystem* physicsServer4D = GetWorld()->GetSubsystem<UPhysicsServer4DWorldSubsystem>();
-	const TArray<UArea4DComponent*>& areaComponents = physicsServer4D->GetAreaComponents();
-	const TArray<UPhysicsBody4DComponent*>& bodyComponents = physicsServer4D->GetPhysicsBodyComponents();
+	const TArray<TWeakObjectPtr<UArea4DComponent>> areaComponents = physicsServer4D->GetAreaComponents();
+	const TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> bodyComponents = physicsServer4D->GetPhysicsBodyComponents();
 	for (int areaIndex = 0; areaIndex < areaComponents.Num(); areaIndex++)
 	{
-		UCollisionObject4DComponent* areaComponent = Cast<UCollisionObject4DComponent>(areaComponents[areaIndex]);
+		UArea4DComponent* areaComponent = areaComponents[areaIndex].Get();
+		if (areaComponent == nullptr)
+		{
+			continue;
+		}
 		_areaAndBodyRects.Add(areaComponent, CalculateShapeRects(areaComponent->GetCollisionShapes()));
 	}
 	for (int bodyIndex = 0; bodyIndex < bodyComponents.Num(); bodyIndex++)
 	{
-		UCollisionObject4DComponent* bodyNode = Cast<UCollisionObject4DComponent>(bodyComponents[bodyIndex]);
+		UPhysicsBody4DComponent* bodyNode = bodyComponents[bodyIndex].Get();
+		if (bodyNode == nullptr)
+		{
+			continue;
+		}
 		_areaAndBodyRects.Add(bodyNode, CalculateShapeRects(bodyNode->GetCollisionShapes()));
 		// Also since we're in a loop with bodies, apply gravity here, before stepping.
 		UDynamicBody4DComponent* dynamicBody = Cast<UDynamicBody4DComponent>(bodyNode);
@@ -386,7 +410,7 @@ void UAxisAlignedBoxPhysicsEngine4D::PhysicsProcess(const double InDeltaTime)
 	// Step dynamic rigid bodies with the calculated rects.
 	for (int bodyIndex = 0; bodyIndex < bodyComponents.Num(); bodyIndex++)
 	{
-		UDynamicBody4DComponent* dynamicBody = Cast<UDynamicBody4DComponent>(bodyComponents[bodyIndex]);
+		UDynamicBody4DComponent* dynamicBody = Cast<UDynamicBody4DComponent>(bodyComponents[bodyIndex].Get());
 		if (dynamicBody != nullptr)
 		{
 			const TArray<UShape4DComponent*>& movingShapes = dynamicBody->GetCollisionShapes();

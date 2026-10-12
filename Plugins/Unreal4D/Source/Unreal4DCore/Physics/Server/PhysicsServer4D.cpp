@@ -2,6 +2,7 @@
 
 #include "../Bodies/StaticBody4D.h"
 #include "AxisAlignedBoxPhysicsEngine4D.h"
+#include "../../Scene/Components/Primitive4DComponent.h"
 
 void UPhysicsServer4DWorldSubsystem::Initialize(FSubsystemCollectionBase& InCollection)
 {
@@ -28,6 +29,7 @@ void UPhysicsServer4DWorldSubsystem::Deinitialize()
 	_physicsEngines.Empty();
 	_areaComponents.Empty();
 	_physicsBodyComponents.Empty();
+	_primitiveColliders.Empty();
 	if (_worldStaticBodyForBodylessShapes != nullptr)
 	{
 		_worldStaticBodyForBodylessShapes->DestroyComponent();
@@ -129,11 +131,11 @@ void UPhysicsServer4DWorldSubsystem::PhysicsTick(const double InDeltaTime)
 		return;
 	}
 	// Set LastPhysicsDeltaTime in all physics bodies.
-	for (UPhysicsBody4DComponent* body : _physicsBodyComponents)
+	for (const TWeakObjectPtr<UPhysicsBody4DComponent>& bodyObjPtr : _physicsBodyComponents)
 	{
-		if (body != nullptr)
+		if (bodyObjPtr.IsValid())
 		{
-			body->LastPhysicsDeltaTime = InDeltaTime;
+			bodyObjPtr->LastPhysicsDeltaTime = InDeltaTime;
 		}
 	}
 	// Hand off control to the current physics engine to process the physics tick.
@@ -172,6 +174,43 @@ void UPhysicsServer4DWorldSubsystem::MoveArea(UArea4DComponent* InAreaComponent,
 		return;
 	}
 	_currentPhysicsEngine->MoveArea(InAreaComponent, InMotion);
+}
+
+void UPhysicsServer4DWorldSubsystem::RegisterCollider(UPrimitive4DComponent* InCollider)
+{
+	if (IsValid(InCollider))
+	{
+		_primitiveColliders.AddUnique(InCollider);
+	}
+}
+
+void UPhysicsServer4DWorldSubsystem::UnregisterCollider(UPrimitive4DComponent* InCollider)
+{
+	_primitiveColliders.RemoveSingleSwap(InCollider);
+}
+
+bool UPhysicsServer4DWorldSubsystem::QueryPointCollision(const FVector4& InPoint, TArray<FCollisionManifold4D>& OutCollisions, const bool InAny) const
+{
+	// TODO: Use spatial partitioning to avoid querying every collider.
+	bool result = false;
+	for (const TWeakObjectPtr<UPrimitive4DComponent>& colliderRef : _primitiveColliders)
+	{
+		if (const UPrimitive4DComponent* collider = colliderRef.Get())
+		{
+			FCollisionManifold4D collision;
+			if (collider->QueryPointCollision(InPoint, collision))
+			{
+				ensureAlways(collision.IsValid());
+				OutCollisions.Add(collision);
+				result = true;
+				if (InAny)
+				{
+					break;
+				}
+			}
+		}
+	}
+	return result;
 }
 
 void UPhysicsServer4DWorldSubsystem::RegisterArea(UArea4DComponent* InAreaComponent)
@@ -323,12 +362,12 @@ void UPhysicsServer4DWorldSubsystem::SetCurrentPhysicsEngineName(const FName& In
 	UE_LOG(LogUnreal4DCore, Warning, TEXT("UPhysicsServer4DWorldSubsystem::SetCurrentPhysicsEngineName: Physics engine '%s' not registered. The first registered engine '%s' will be used as a fallback."), *InName.ToString(), *_currentPhysicsEngineName.ToString());
 }
 
-TArray<UArea4DComponent*> UPhysicsServer4DWorldSubsystem::GetAreaComponents() const
+TArray<TWeakObjectPtr<UArea4DComponent>> UPhysicsServer4DWorldSubsystem::GetAreaComponents() const
 {
 	return _areaComponents;
 }
 
-TArray<UPhysicsBody4DComponent*> UPhysicsServer4DWorldSubsystem::GetPhysicsBodyComponents() const
+TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> UPhysicsServer4DWorldSubsystem::GetPhysicsBodyComponents() const
 {
 	return _physicsBodyComponents;
 }

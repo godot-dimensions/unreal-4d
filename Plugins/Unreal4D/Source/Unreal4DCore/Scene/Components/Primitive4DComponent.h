@@ -3,6 +3,7 @@
 #include "Scene4DComponent.h"
 
 #include "../../Physics/Shapes/Data/Shape4DData.h"
+#include "../../Physics/CollisionManifold4D.h"
 
 #include "Primitive4DComponent.generated.h"
 
@@ -15,6 +16,9 @@ class UNREAL4DCORE_API UPrimitive4DComponent : public UScene4DComponent
 
 public:
 	virtual UShape4DData* GetShapeData() const { return nullptr; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Physics")
+	virtual bool QueryPointCollision(const FVector4& InPoint, FCollisionManifold4D& OutCollision) const;
 
 	// Raycasting.
 	// NOTE: The default max distance is 1e300 instead of infinity because the Unreal Header Tool does not like non-literal default values for parameters.
