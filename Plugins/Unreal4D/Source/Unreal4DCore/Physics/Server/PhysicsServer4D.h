@@ -10,6 +10,8 @@ constexpr double PHYSICS_4D_SAFE_MARGIN = 0.000000000001;
 
 class UPrimitive4DComponent;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPrimitive4DRegistrationDelegate, UPrimitive4DComponent*, InPrimitive);
+
 UENUM()
 enum class EPhysicsTickPolicy4D : uint8
 {
@@ -83,10 +85,18 @@ public:
 	FKinematicCollision4D MoveAndCollide(UPhysicsBody4DComponent* InBodyNode, FVector4 InMotion, bool InTestOnly = false, double InDeltaTime = -1.0);
 	void MoveArea(UArea4DComponent* InAreaComponent, FVector4 InMotion);
 
-	void RegisterCollider(UPrimitive4DComponent* InCollider);
-	void UnregisterCollider(UPrimitive4DComponent* InCollider);
+	void RegisterPrimitive(UPrimitive4DComponent* InPrimitiveCollider);
+	void UnregisterPrimitive(UPrimitive4DComponent* InPrimitiveCollider);
 
-	// Appends hits from registered 4D colliders. InAny stops after the first hit.
+	// RegisterPrimitive/UnregisterPrimitive notify synchronously after registry membership changes.
+	// Component OnRegister/OnUnregister may still be running; defer component creation or destruction.
+	UPROPERTY(Transient, BlueprintAssignable, Category = "Unreal 4D|Physics|Server")
+	FPrimitive4DRegistrationDelegate OnPrimitiveRegistered;
+
+	UPROPERTY(Transient, BlueprintAssignable, Category = "Unreal 4D|Physics|Server")
+	FPrimitive4DRegistrationDelegate OnPrimitiveUnregistered;
+
+	// Appends hits from registered Primitive4D colliders. InAny stops after the first hit.
 	UFUNCTION(BlueprintCallable, BlueprintPure = true, Category = "Unreal 4D|Physics|Server")
 	bool QueryPointCollision(const FVector4& InPoint, TArray<FCollisionManifold4D>& OutCollisions, const bool InAny = false) const;
 
@@ -106,6 +116,7 @@ public:
 
 	// Return snapshots so registration changes during callbacks do not invalidate iteration.
 	// Resolve each weak reference before use; components may have been destroyed since the snapshot.
+	TArray<TWeakObjectPtr<UPrimitive4DComponent>> GetRegisteredColliders() const;
 	TArray<TWeakObjectPtr<UArea4DComponent>> GetAreaComponents() const;
 	TArray<TWeakObjectPtr<UPhysicsBody4DComponent>> GetPhysicsBodyComponents() const;
 

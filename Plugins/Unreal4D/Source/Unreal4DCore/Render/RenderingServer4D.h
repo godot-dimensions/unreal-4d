@@ -12,6 +12,8 @@ class FCamera4DRenderState;
 
 #include "RenderingServer4D.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMesh4DRegistrationDelegate, UMesh4DComponent*, InMesh);
+
 // World subsystem that:
 // - Tracks registered cameras and mesh components (weak refs).
 // - Maintains a single "current" camera.
@@ -103,6 +105,17 @@ public:
 	void UnregisterMesh(UMesh4DComponent* InMesh);
 	void DirtyMeshBounds(UMesh4DComponent* InMesh);
 	void DirtyAllMeshBounds();
+
+	// RegisterMesh/UnregisterMesh notify synchronously after registry membership and dirty bounds change.
+	// Component OnRegister/OnUnregister may still be running; defer component creation or destruction.
+	UPROPERTY(Transient, BlueprintAssignable, Category = "Unreal 4D|Render")
+	FMesh4DRegistrationDelegate OnMeshRegistered;
+
+	UPROPERTY(Transient, BlueprintAssignable, Category = "Unreal 4D|Render")
+	FMesh4DRegistrationDelegate OnMeshUnregistered;
+
+	// Return a snapshot so callbacks cannot invalidate iteration. Resolve weak references before use.
+	TArray<TWeakObjectPtr<UMesh4DComponent>> GetRegisteredMeshes() const;
 
 	const TSharedPtr<FCamera4DRenderState, ESPMode::ThreadSafe>& GetCameraRenderState() const
 	{

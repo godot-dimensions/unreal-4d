@@ -364,6 +364,7 @@ void URenderingServer4D::RegisterMesh(UMesh4DComponent* InMesh)
 		FRegisteredMesh& registeredMesh = RegisteredMeshes.AddDefaulted_GetRef();
 		registeredMesh.MeshComponent = InMesh;
 		DirtyMeshBounds(InMesh);
+		OnMeshRegistered.Broadcast(InMesh);
 	}
 }
 
@@ -372,6 +373,7 @@ void URenderingServer4D::UnregisterMesh(UMesh4DComponent* InMesh)
 	if (IsValid(InMesh))
 	{
 		const int32 index = RegisteredMeshes.IndexOfByKey(InMesh);
+		const bool bWasRegistered = index != INDEX_NONE;
 		if (index != INDEX_NONE)
 		{
 			RegisteredMeshes.RemoveAtSwap(index);
@@ -381,7 +383,22 @@ void URenderingServer4D::UnregisterMesh(UMesh4DComponent* InMesh)
 		{
 			DirtyMeshes.RemoveAtSwap(dirtyIndex);
 		}
+		if (bWasRegistered)
+		{
+			OnMeshUnregistered.Broadcast(InMesh);
+		}
 	}
+}
+
+TArray<TWeakObjectPtr<UMesh4DComponent>> URenderingServer4D::GetRegisteredMeshes() const
+{
+	TArray<TWeakObjectPtr<UMesh4DComponent>> meshes;
+	meshes.Reserve(RegisteredMeshes.Num());
+	for (const FRegisteredMesh& registeredMesh : RegisteredMeshes)
+	{
+		meshes.Add(registeredMesh.MeshComponent);
+	}
+	return meshes;
 }
 
 void URenderingServer4D::DirtyMeshBounds(UMesh4DComponent* InMesh)

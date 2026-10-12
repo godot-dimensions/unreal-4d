@@ -332,7 +332,7 @@ void UMesh4DComponent::OnRegister()
 		}
 		if (UPhysicsServer4DWorldSubsystem* Server = World->GetSubsystem<UPhysicsServer4DWorldSubsystem>())
 		{
-			Server->RegisterCollider(this);
+			Server->RegisterPrimitive(this);
 		}
 	}
 
@@ -355,7 +355,7 @@ void UMesh4DComponent::OnUnregister()
 		}
 		if (UPhysicsServer4DWorldSubsystem* Server = World->GetSubsystem<UPhysicsServer4DWorldSubsystem>())
 		{
-			Server->UnregisterCollider(this);
+			Server->UnregisterPrimitive(this);
 		}
 	}
 

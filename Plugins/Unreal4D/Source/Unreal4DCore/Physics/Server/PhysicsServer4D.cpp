@@ -176,17 +176,21 @@ void UPhysicsServer4DWorldSubsystem::MoveArea(UArea4DComponent* InAreaComponent,
 	_currentPhysicsEngine->MoveArea(InAreaComponent, InMotion);
 }
 
-void UPhysicsServer4DWorldSubsystem::RegisterCollider(UPrimitive4DComponent* InCollider)
+void UPhysicsServer4DWorldSubsystem::RegisterPrimitive(UPrimitive4DComponent* InPrimitiveCollider)
 {
-	if (IsValid(InCollider))
+	if (IsValid(InPrimitiveCollider) && !_primitiveColliders.Contains(InPrimitiveCollider))
 	{
-		_primitiveColliders.AddUnique(InCollider);
+		_primitiveColliders.Add(InPrimitiveCollider);
+		OnPrimitiveRegistered.Broadcast(InPrimitiveCollider);
 	}
 }
 
-void UPhysicsServer4DWorldSubsystem::UnregisterCollider(UPrimitive4DComponent* InCollider)
+void UPhysicsServer4DWorldSubsystem::UnregisterPrimitive(UPrimitive4DComponent* InPrimitiveCollider)
 {
-	_primitiveColliders.RemoveSingleSwap(InCollider);
+	if (_primitiveColliders.RemoveSingleSwap(InPrimitiveCollider) > 0)
+	{
+		OnPrimitiveUnregistered.Broadcast(InPrimitiveCollider);
+	}
 }
 
 bool UPhysicsServer4DWorldSubsystem::QueryPointCollision(const FVector4& InPoint, TArray<FCollisionManifold4D>& OutCollisions, const bool InAny) const
@@ -360,6 +364,11 @@ void UPhysicsServer4DWorldSubsystem::SetCurrentPhysicsEngineName(const FName& In
 	_currentPhysicsEngineName = _physicsEngines.begin()->Key;
 	_currentPhysicsEngine = _physicsEngines.begin()->Value;
 	UE_LOG(LogUnreal4DCore, Warning, TEXT("UPhysicsServer4DWorldSubsystem::SetCurrentPhysicsEngineName: Physics engine '%s' not registered. The first registered engine '%s' will be used as a fallback."), *InName.ToString(), *_currentPhysicsEngineName.ToString());
+}
+
+TArray<TWeakObjectPtr<UPrimitive4DComponent>> UPhysicsServer4DWorldSubsystem::GetRegisteredColliders() const
+{
+	return _primitiveColliders;
 }
 
 TArray<TWeakObjectPtr<UArea4DComponent>> UPhysicsServer4DWorldSubsystem::GetAreaComponents() const
