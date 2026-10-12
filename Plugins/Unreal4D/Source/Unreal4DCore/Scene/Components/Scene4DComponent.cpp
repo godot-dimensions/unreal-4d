@@ -1,6 +1,7 @@
 #include "Scene4DComponent.h"
 
 #include "../../Render/RenderingServer4D.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/World.h"
 
 bool UScene4DComponent::bReportNon4DParentErrors = true;
@@ -53,6 +54,12 @@ void UScene4DComponent::SyncTransform4DFromArchetype()
 	// Get the archetype (Blueprint template) version of this component, if this is part of a Blueprint.
 	UScene4DComponent* archetypeComponent = Cast<UScene4DComponent>(GetArchetype());
 	if (archetypeComponent == nullptr)
+	{
+		return;
+	}
+	// Every UObject has an archetype, including level-created components. Only Blueprint
+	// component templates define transforms that should be inherited by placed instances.
+	if (archetypeComponent->HasAnyFlags(RF_ClassDefaultObject) || archetypeComponent->GetTypedOuter<UBlueprintGeneratedClass>() == nullptr)
 	{
 		return;
 	}
