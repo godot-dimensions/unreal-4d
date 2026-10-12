@@ -48,7 +48,11 @@ The Unix build scripts support the following command-line arguments:
 - `--skip-project-files` to skip regenerating VS Code metadata and just rebuild existing C++ files.
 - `--generate-only` to regenerate VS Code metadata without compiling.
 
-The script asks UnrealBuildTool to generate its VS Code workspace and compilation database, adds the external Unreal4D plugin folder, and creates machine-specific `.vscode` files at the repository root. It does not update this repository or the Unreal Engine checkout.
+The script asks UnrealBuildTool to generate its VS Code workspace and compilation database, adds the external Unreal4D plugin folder, and creates machine-specific `.vscode` files at the repository root. It leaves repository source files unchanged.
+
+On macOS, project generation, builds, packaging, and editor launches use the shared setup in `Plugins/Unreal4D/Tools`. The two Apple Clang conversion warnings remain visible but are not treated as errors. The same compiler arguments apply to Quantum Hosky and ShaderCompileWorker, so switching between the example and Quantum Hosky does not change the engine's warning settings. Editor builds also build ShaderCompileWorker when using a source engine checkout.
+
+The setup discovers the installed Metal compiler and its companion tools and creates Unreal's override layout under the plugin's ignored `BuildArtifacts/MacToolchains` directory. The override is inherited by shader workers. Install Xcode's Metal Toolchain component before building; missing tools are reported before compilation starts. For a nonstandard installation, set `UNREAL4D_METAL_TOOLCHAIN` to the toolchain directory or its `usr/bin` directory. No local Xcode or toolchain path is stored in source files. Generated macOS VS Code build tasks use the same setup; regenerate metadata after changing the selected Xcode installation.
 
 ## Run the editor on macOS or Linux
 

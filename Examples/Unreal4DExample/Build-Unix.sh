@@ -99,6 +99,10 @@ fi
     die "Unreal Engine was not found at '$engine_root'. Pass --engine-root or set UNREAL_ENGINE_ROOT."
 engine_root=$(CDPATH= cd -P "$engine_root" && pwd)
 
+plugin_root=$repository_root/Plugins/Unreal4D
+. "$plugin_root/Tools/MacEnvironment.sh"
+unreal4d_setup_environment "$plugin_root" "$engine_root"
+
 project_file=$script_dir/Unreal4DExample.uproject
 generate_project_files=$engine_root/GenerateProjectFiles.sh
 build_tool=$engine_root/$build_tool_relative
@@ -117,7 +121,7 @@ if [ "$skip_project_files" -eq 0 ]; then
         die "Python 3 was not found in PATH or beneath '$engine_root'."
     fi
 
-    "$generate_project_files" \
+    unreal4d_run "$generate_project_files" \
         "-Project=$project_file" \
         -Game \
         -Engine \
@@ -125,7 +129,8 @@ if [ "$skip_project_files" -eq 0 ]; then
         -Automated \
         -VSCode
 
-    "$python_command" - "$repository_root" "$script_dir" <<'PYTHON'
+    unreal4d_run "$python_command" - "$repository_root" "$script_dir" "$plugin_root" "$engine_root" <<'PYTHON'
+import importlib.util
 import json
 import os
 import sys
@@ -157,6 +162,13 @@ def write_json(path, value):
 
 cpp_configuration = read_json(generated_cpp_configuration)
 workspace = read_json(generated_workspace)
+
+if os.environ.get("UNREAL4D_MAC_ENVIRONMENT") == "1":
+    sys.dont_write_bytecode = True
+    helper_spec = importlib.util.spec_from_file_location("mac_environment", os.path.join(sys.argv[3], "Tools", "MacEnvironment.py"))
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
+    helper.configure_vscode(workspace, sys.argv[3], sys.argv[4])
 
 compile_commands = None
 for configuration in cpp_configuration.get("configurations", []):
@@ -290,11 +302,17 @@ else
     target_name=Unreal4DExample
 fi
 
-"$build_tool" \
+set -- \
     "$target_name" \
     "$host_platform" \
     "$configuration" \
     "-Project=$project_file" \
     -WaitMutex
+
+if [ "$host_platform" = Mac ] && [ "$target" = Editor ]; then
+    set -- "$@" -buildscw
+fi
+
+unreal4d_run "$build_tool" "$@"
 
 printf 'Successfully built %s for %s %s.\n' "$target_name" "$host_platform" "$configuration"

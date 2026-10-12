@@ -80,23 +80,26 @@ if [ -z "$engine_root" ]; then
     engine_root=$script_dir/../../../UnrealEngine5
 fi
 
+[ -d "$engine_root" ] ||
+    die "Unreal Engine was not found at '$engine_root'. Pass --engine-root or set UNREAL_ENGINE_ROOT."
+engine_root=$(CDPATH= cd -P "$engine_root" && pwd)
+plugin_root=$script_dir/../../Plugins/Unreal4D
+. "$plugin_root/Tools/MacEnvironment.sh"
+unreal4d_setup_environment "$plugin_root" "$engine_root"
+
 if [ "$skip_build" -eq 0 ]; then
-    "$build_script" "$@"
+    unreal4d_run "$build_script" "$@"
 fi
 
 if [ "$generate_only" -eq 1 ]; then
     exit 0
 fi
 
-[ -d "$engine_root" ] ||
-    die "Unreal Engine was not found at '$engine_root'. Pass --engine-root or set UNREAL_ENGINE_ROOT."
-engine_root=$(CDPATH= cd -P "$engine_root" && pwd)
-
 editor=$engine_root/$editor_relative
 [ -x "$editor" ] || die "Unreal Editor was not found or is not executable: $editor"
 
 printf 'Opening Unreal4DExample in the Unreal Editor...\n'
 if [ "$configuration" = DebugGame ]; then
-    exec "$editor" "$project_file" -debug
+    unreal4d_exec "$editor" "$project_file" -debug
 fi
-exec "$editor" "$project_file"
+unreal4d_exec "$editor" "$project_file"

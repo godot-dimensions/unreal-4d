@@ -69,6 +69,9 @@ fi
     die "Unreal Engine was not found at '$engine_root'. Pass --engine-root or set UNREAL_ENGINE_ROOT."
 engine_root=$(CDPATH= cd -P "$engine_root" && pwd)
 
+. "$script_dir/Tools/MacEnvironment.sh"
+unreal4d_setup_environment "$script_dir" "$engine_root"
+
 plugin_file=$script_dir/Unreal4D.uplugin
 run_uat=$engine_root/Engine/Build/BatchFiles/RunUAT.sh
 
@@ -87,7 +90,7 @@ else
     esac
 fi
 
-"$run_uat" BuildPlugin \
+unreal4d_run "$run_uat" BuildPlugin \
     "-Plugin=$plugin_file" \
     "-Package=$package_dir" \
     "-TargetPlatforms=$target_platforms"

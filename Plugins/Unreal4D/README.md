@@ -21,6 +21,10 @@ The Windows build scripts support the following command-line arguments:
 
 Run `Build-macOS.command` on macOS or `Build-Linux.sh` on Linux. Both are lightweight wrappers around the shared `Build-Unix.sh` implementation.
 
+On macOS, the shared `Tools/MacEnvironment.sh` setup supplies the same Apple Clang warning exceptions used by the example and Quantum Hosky. It uses UnrealBuildTool's `UBT_EXTRA_ARGS` environment hook, including builds started by `RunUAT BuildPlugin`. It also discovers the installed Metal tools and supplies an override inherited by shader workers. Missing tools are reported before packaging starts. The generated override is stored in ignored `BuildArtifacts/MacToolchains`; no engine source modifications or machine-specific source paths are required.
+
+`Tools/Setup-macOS.sh` is an internal wrapper for generated IDE tasks. It accepts an engine root and a command, sets up that command's macOS environment, and executes it. Use `Build-macOS.command` to package the plugin from Finder or a terminal.
+
 The Unix build scripts support the following command-line arguments:
 
 - `--engine-root` if the Unreal source code is located elsewhere.
