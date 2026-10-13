@@ -371,6 +371,19 @@ void FUnreal4DEditorMode::SetEditorCameraRotation4Dand3D(FEditorViewportClient* 
 	SetEditorCameraGroundBasis4D(InViewportClient, InNewGroundBasis4D);
 }
 
+void FUnreal4DEditorMode::SetEditorCameraFullTransform(FEditorViewportClient* InViewportClient, const FTransform4D& InCameraTransform4D, const FTransform& InCameraTransform3D)
+{
+	if (InViewportClient == nullptr)
+	{
+		return;
+	}
+	FEditorViewportCameraTransform4D& cameraTransform = GetOrAddViewportCameraTransform(InViewportClient);
+	cameraTransform.GroundTransform4D = InCameraTransform4D;
+	cameraTransform.GroundTransform3D = InCameraTransform3D;
+	cameraTransform.ParentOfGroundTransform3Dtomakeit4D = FTransform4D::From3D(InCameraTransform3D).TransformTo(InCameraTransform4D);
+	UpdateRenderingServerWithEditorCameraTransform(InViewportClient);
+}
+
 void FUnreal4DEditorMode::SetEditorCameraPosition4D(FEditorViewportClient* InViewportClient, const FVector4& InNewPosition)
 {
 	if (InViewportClient == nullptr)

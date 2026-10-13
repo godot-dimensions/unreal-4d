@@ -82,6 +82,7 @@ public:
 	void SetEditorCameraPosition4D(FEditorViewportClient* InViewportClient, const FVector4& InNewPosition);
 	void SetEditorCameraGroundBasis4D(FEditorViewportClient* InViewportClient, const FMatrix& InNewGroundBasis);
 	void SetEditorCameraRotation4Dand3D(FEditorViewportClient* InViewportClient, const FMatrix& InNewGroundBasis, const double InYawDegrees3D, const double InPitchDegrees3D);
+	void SetEditorCameraFullTransform(FEditorViewportClient* InViewportClient, const FTransform4D& InCameraTransform4D, const FTransform& InCameraTransform3D);
 
 	// Handler called when drop elements have their transforms updated during drag or drop operations.
 	void OnDropElementTransformUpdated(AActor* InActor, const FTypedElementHandle& InElement, const FTransform& InTransform3D);
