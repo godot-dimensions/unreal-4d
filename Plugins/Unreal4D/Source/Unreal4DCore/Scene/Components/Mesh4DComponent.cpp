@@ -4,6 +4,7 @@
 
 #include "../../Model/Mesh/Tetra/TetraMesh4D.h"
 #include "../../Render/RenderingServer4D.h"
+#include "../../Render/RenderingSettings4D.h"
 #include "../../Physics/Server/PhysicsServer4D.h"
 #include "../../Math/Geometry4D.h"
 #include "Unreal4DRendering/Rasterization/TetraMesh4DComponentGPUSceneProxy.h"
@@ -568,6 +569,11 @@ UMaterialInterface* UMesh4DComponent::GetProjectionMaterialForProjectionComponen
 	if (ProjectionMaterial != nullptr)
 	{
 		return ProjectionMaterial;
+	}
+
+	if (UMaterialInterface* DefaultProjectionMaterial = URenderingSettings4D::Get()->GetDefaultProjectionMaterial())
+	{
+		return DefaultProjectionMaterial;
 	}
 
 	return UMaterial::GetDefaultMaterial(MD_Surface);

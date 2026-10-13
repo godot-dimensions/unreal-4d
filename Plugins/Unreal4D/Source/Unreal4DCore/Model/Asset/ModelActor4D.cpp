@@ -20,6 +20,9 @@ void AModelActor4D::DestroyGeneratedComponents()
 		{
 			RemoveInstanceComponent(comp);
 			comp->DestroyComponent(/*bPromoteChildren=*/ false);
+			// Destroyed objects remain until garbage collection. Free their names so
+			// a rebuilt model can use the same node name for a different component class.
+			comp->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_NonTransactional | REN_ForceNoResetLoaders);
 		}
 	}
 	GeneratedComponents.Reset();
