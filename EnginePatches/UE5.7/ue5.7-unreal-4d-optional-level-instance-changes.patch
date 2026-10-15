@@ -1,0 +1,816 @@
+diff --git a/Engine/Plugins/Interchange/Editor/Source/InterchangeEditor/Private/InterchangeEditorScriptLibrary.cpp b/Engine/Plugins/Interchange/Editor/Source/InterchangeEditor/Private/InterchangeEditorScriptLibrary.cpp
+index 5d813b4..0b8abfc 100644
+--- a/Engine/Plugins/Interchange/Editor/Source/InterchangeEditor/Private/InterchangeEditorScriptLibrary.cpp
++++ b/Engine/Plugins/Interchange/Editor/Source/InterchangeEditor/Private/InterchangeEditorScriptLibrary.cpp
+@@ -25,6 +25,7 @@
+ 
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(InterchangeEditorScriptLibrary)
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
+ 
+ #define LOCTEXT_NAMESPACE "InterchangeEditorScriptLibrary"
+ 
+@@ -423,7 +424,15 @@ void UInterchangeEditorScriptLibrary::ResetSceneImportAsset(UInterchangeSceneImp
+ #if WITH_EDITOR
+ 									// Make sure transformation is up to date after registration as its possible LevelInstance actor can get unregistered when editing properties
+ 									// through Details panel. In this case the ULevelInstanceComponent might not be able to update the ALevelInstanceEditorInstanceActor transform.
+-									LevelInstance->GetLevelInstanceComponent()->UpdateEditorInstanceActor();
++#if UNREAL_4D_ENGINE_CHANGE
++									// Conditional calling backported from UE 5.9, but the conditional data type depends on Unreal 4D.
++									if (ILevelInstanceComponentInterface* LevelInstanceComponent = LevelInstance->GetLevelInstanceComponent())
++#else
++									if (ULevelInstanceComponent* LevelInstanceComponent = LevelInstance->GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
++									{
++										LevelInstanceComponent->UpdateEditorInstanceActor();
++									}
+ #endif
+ 									if (LevelInstance->CanExitEdit())
+ 									{
+@@ -638,3 +647,5 @@ const TArray<AActor*> UInterchangeEditorScriptLibrary::LevelInstanceGetEditableA
+ }
+ 
+ #undef LOCTEXT_NAMESPACE // "InterchangeResetEditorSubsystem"
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/LevelInstanceEditor/Private/LevelInstanceFilterPropertyTypeCustomization.cpp b/Engine/Source/Editor/LevelInstanceEditor/Private/LevelInstanceFilterPropertyTypeCustomization.cpp
+index d3708b8..cee5ec1 100644
+--- a/Engine/Source/Editor/LevelInstanceEditor/Private/LevelInstanceFilterPropertyTypeCustomization.cpp
++++ b/Engine/Source/Editor/LevelInstanceEditor/Private/LevelInstanceFilterPropertyTypeCustomization.cpp
+@@ -14,6 +14,8 @@
+ #include "PropertyHandle.h"
+ #include "Subsystems/AssetEditorSubsystem.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #define LOCTEXT_NAMESPACE "WorldPartitionActorFilter"
+ 
+ TSharedPtr<FWorldPartitionActorFilterMode::FFilter> FLevelInstanceFilterPropertyTypeCustomization::CreateModeFilter(TArray<UObject*> OuterObjects)
+@@ -111,7 +113,11 @@ void FLevelInstanceFilterPropertyTypeCustomization::ApplyFilter(TSharedRef<IProp
+ 	const FScopedTransaction Transaction(LOCTEXT("WorldPartitionActorFilterApply_Transaction", "Apply Level Instance Filter"));
+ 	for (auto& [LevelInstance, ObjectIndex] : LevelInstances)
+ 	{
++#if UNREAL_4D_ENGINE_CHANGE
++		ILevelInstanceComponentInterface* Component = LevelInstance->GetLevelInstanceComponent();
++#else
+ 		ULevelInstanceComponent* Component = LevelInstance->GetLevelInstanceComponent();
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 		FWorldPartitionActorFilter ComponentFilter = Component->GetFilter();
+ 		Mode.Apply(ComponentFilter);
+ 		
+@@ -120,4 +126,6 @@ void FLevelInstanceFilterPropertyTypeCustomization::ApplyFilter(TSharedRef<IProp
+ 	}
+ }
+ 
+-#undef LOCTEXT_NAMESPACE
+\ No newline at end of file
++#undef LOCTEXT_NAMESPACE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActor.cpp b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActor.cpp
+index 7f2c680..af7f653 100644
+--- a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActor.cpp
++++ b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActor.cpp
+@@ -18,8 +18,11 @@
+ #include "WorldPartition/LevelInstance/LevelInstanceActorDesc.h"
+ #include "LevelInstance/LevelInstanceEditorPivotActor.h"
+ #include "Misc/MessageDialog.h"
++#include "LevelInstance/LevelInstanceEditorInstanceActor.h"
+ #endif
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #define LOCTEXT_NAMESPACE "LevelInstanceActor"
+ 
+ ALevelInstance::ALevelInstance()
+@@ -156,10 +159,22 @@ void ALevelInstance::SetPropertyOverrideAsset(ULevelInstancePropertyOverrideAsse
+ }
+ 
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++ILevelInstanceComponentInterface* ALevelInstance::GetLevelInstanceComponent() const
++{
++	return Cast<ILevelInstanceComponentInterface>(RootComponent);
++}
++
++AActor* ALevelInstance::CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const
++{
++	return ALevelInstanceEditorInstanceActor::Create(LevelInstance, LoadedLevel);
++}
++#else
+ ULevelInstanceComponent* ALevelInstance::GetLevelInstanceComponent() const
+ {
+ 	return Cast<ULevelInstanceComponent>(RootComponent);
+ }
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ TSubclassOf<AActor> ALevelInstance::GetEditorPivotClass() const
+ {
+@@ -450,3 +465,5 @@ void ALevelInstance::SetDesiredRuntimeBehavior(ELevelInstanceRuntimeBehavior New
+ 
+ #undef LOCTEXT_NAMESPACE
+ 
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActorImpl.cpp b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActorImpl.cpp
+index 4a2d940..d89a456 100644
+--- a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActorImpl.cpp
++++ b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceActorImpl.cpp
+@@ -22,6 +22,8 @@
+ 
+ #include "WorldPartition/ActorInstanceGuids.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #define LOCTEXT_NAMESPACE "LevelInstanceActor"
+ 
+ void FLevelInstanceActorImpl::RegisterLevelInstance()
+@@ -35,7 +37,15 @@ void FLevelInstanceActorImpl::RegisterLevelInstance()
+ #if WITH_EDITOR
+ 		// Make sure transformation is up to date after registration as its possible LevelInstance actor can get unregistered when editing properties
+ 		// through Details panel. In this case the ULevelInstanceComponent might not be able to update the ALevelInstanceEditorInstanceActor transform.
+-		LevelInstance->GetLevelInstanceComponent()->UpdateEditorInstanceActor();
++#if UNREAL_4D_ENGINE_CHANGE
++		// Conditional calling backported from UE 5.9, but the conditional data type depends on Unreal 4D.
++		if (ILevelInstanceComponentInterface* LevelInstanceComponent = LevelInstance->GetLevelInstanceComponent())
++#else
++		if (ULevelInstanceComponent* LevelInstanceComponent = LevelInstance->GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
++		{
++			LevelInstanceComponent->UpdateEditorInstanceActor();
++		}
+ #endif
+ 	}
+ }
+@@ -60,7 +70,11 @@ void FLevelInstanceActorImpl::UnregisterLevelInstance()
+ 
+ #if WITH_EDITOR
+ 		// Make sure our Component doesn't keep a pointer to the Editor Actor once unloaded
++#if UNREAL_4D_ENGINE_CHANGE
++		LevelInstance->GetLevelInstanceComponent()->AbandonEditorInstanceActor();
++#else
+ 		LevelInstance->GetLevelInstanceComponent()->CachedEditorInstanceActorPtr.Reset();
++#endif // UNREAL_4D_ENGINE_CHANGE
+ #endif
+ 
+ 		// To avoid processing PostUnregisterAllComponents multiple times (BP Recompile is one use case)
+@@ -203,7 +217,11 @@ void FLevelInstanceActorImpl::PostEditUndoInternal()
+ 	CachedLevelInstanceID = FLevelInstanceID();
+ 	CachedWorldAsset.Reset();
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = LevelInstance->GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = LevelInstance->GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		// Order of operations when undoing may lead to the RootComponent being undone before our actor so we need to make sure we update here and in the component when undoing
+ 		LevelInstanceComponent->UpdateEditorInstanceActor();
+@@ -479,3 +497,5 @@ void FLevelInstanceActorImpl::CheckForErrors()
+ #endif
+ 
+ #undef LOCTEXT_NAMESPACE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceComponentInterface.cpp b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceComponentInterface.cpp
+new file mode 100644
+index 0000000..8d1c48d 100644
+--- /dev/null
++++ b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceComponentInterface.cpp
+@@ -0,0 +1,9 @@
++#include "LevelInstance/LevelInstanceComponentInterface.h"
++
++#define UNREAL_4D_ENGINE_CHANGE 1
++
++#if UNREAL_4D_ENGINE_CHANGE
++#include UE_INLINE_GENERATED_CPP_BY_NAME(LevelInstanceComponentInterface)
++#endif // UNREAL_4D_ENGINE_CHANGE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceInterface.cpp b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceInterface.cpp
+index 2f398b4..2b92209 100644
+--- a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceInterface.cpp
++++ b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceInterface.cpp
+@@ -15,6 +15,8 @@
+ #include "LevelInstance/LevelInstanceComponent.h"
+ #endif
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ ULevelInstanceInterface::ULevelInstanceInterface(const FObjectInitializer& ObjectInitializer)
+ 	: Super(ObjectInitializer)
+ {}
+@@ -148,7 +150,11 @@ void ILevelInstanceInterface::UpdateLevelInstanceFromWorldAsset()
+ #if WITH_EDITOR
+ 			LevelInstanceSubsystem->ForEachLevelInstanceAncestorsAndSelf(CastChecked<AActor>(this), [](const ILevelInstanceInterface* Ancestor)
+ 			{
++#if UNREAL_4D_ENGINE_CHANGE
++				if (ILevelInstanceComponentInterface* LevelInstanceComponent = Ancestor->GetLevelInstanceComponent())
++#else
+ 				if (ULevelInstanceComponent* LevelInstanceComponent = Ancestor->GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 				{
+ 					LevelInstanceComponent->ClearCachedFilter();
+ 				}
+@@ -183,7 +189,11 @@ ULevel* ILevelInstanceInterface::GetLoadedLevel() const
+ 
+ bool ILevelInstanceInterface::IsLevelInstanceHLODRelevant() const
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (const UActorComponent* LevelInstanceComponent = Cast<UActorComponent>(GetLevelInstanceComponent()))
++#else
+ 	if (const ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		if (const AActor* Owner = LevelInstanceComponent->GetOwner())
+ 		{
+@@ -325,7 +335,11 @@ bool ILevelInstanceInterface::EnterEdit(AActor* ContextActor)
+ 
+ void ILevelInstanceInterface::OnEdit()
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		LevelInstanceComponent->OnEdit();
+ 	}
+@@ -333,7 +347,11 @@ void ILevelInstanceInterface::OnEdit()
+ 
+ void ILevelInstanceInterface::OnEditPropertyOverrides()
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		LevelInstanceComponent->OnEditOverrides();
+ 	}
+@@ -382,7 +400,11 @@ bool ILevelInstanceInterface::ExitEdit(bool bDiscardEdits)
+ 
+ void ILevelInstanceInterface::OnCommitPropertyOverrides(bool bChanged)
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		LevelInstanceComponent->OnCommitOverrides();
+ 	}
+@@ -390,7 +412,11 @@ void ILevelInstanceInterface::OnCommitPropertyOverrides(bool bChanged)
+ 
+ void ILevelInstanceInterface::OnCommit(bool bChanged)
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		LevelInstanceComponent->OnCommit();
+ 	}
+@@ -418,7 +444,11 @@ bool ILevelInstanceInterface::MoveActorsTo(const TArray<AActor*>& ActorsToMove)
+ 
+ const FWorldPartitionActorFilter& ILevelInstanceInterface::GetFilter() const
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		return LevelInstanceComponent->GetFilter();
+ 	}
+@@ -429,7 +459,11 @@ const FWorldPartitionActorFilter& ILevelInstanceInterface::GetFilter() const
+ 
+ const TMap<FActorContainerID, TSet<FGuid>>& ILevelInstanceInterface::GetFilteredActorsPerContainer() const
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		return LevelInstanceComponent->GetFilteredActorsPerContainer();
+ 	}
+@@ -440,7 +474,11 @@ const TMap<FActorContainerID, TSet<FGuid>>& ILevelInstanceInterface::GetFiltered
+ 
+ void ILevelInstanceInterface::SetFilter(const FWorldPartitionActorFilter& InFilter, bool bNotify)
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	if (ILevelInstanceComponentInterface* LevelInstanceComponent = GetLevelInstanceComponent())
++#else
+ 	if (ULevelInstanceComponent* LevelInstanceComponent = GetLevelInstanceComponent())
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	{
+ 		LevelInstanceComponent->SetFilter(InFilter, bNotify);
+ 	}
+@@ -472,3 +510,5 @@ EWorldPartitionActorFilterType ILevelInstanceInterface::GetDetailsFilterTypes()
+ #endif
+ 
+ 
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceLevelStreaming.cpp b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceLevelStreaming.cpp
+index b9847e3..409748a 100644
+--- a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceLevelStreaming.cpp
++++ b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceLevelStreaming.cpp
+@@ -31,6 +31,8 @@
+ #include "Engine/GameEngine.h"
+ #include "Streaming/LevelStreamingDelegates.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ static bool GDisableLevelInstanceEditorPartialLoading = false;
+ FAutoConsoleVariableRef CVarDisableLevelInstanceEditorPartialLoading(
+ 	TEXT("wp.Editor.DisableLevelInstanceEditorPartialLoading"),
+@@ -474,7 +476,11 @@ void ULevelStreamingLevelInstance::OnCurrentStateChanged(ELevelStreamingState In
+ 		Level->OnLoadedActorRemovedFromLevelPreEvent.AddUObject(this, &ULevelStreamingLevelInstance::OnLoadedActorsRemovedFromLevelPostEvent);
+ 
+ 		// Create special actor that will handle selection and transform
++#if UNREAL_4D_ENGINE_CHANGE
++		LevelInstanceEditorInstanceActor = LevelInstance->CreateLevelInstanceEditorInstance(LevelInstance, Level);
++#else
+ 		LevelInstanceEditorInstanceActor = ALevelInstanceEditorInstanceActor::Create(LevelInstance, Level);
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ 		// Push editing state to child actors
+ 		AActor* LevelInstanceActor = CastChecked<AActor>(LevelInstance);
+@@ -587,3 +593,5 @@ void ULevelStreamingLevelInstance::OnLevelLoadedChanged(ULevel* InLevel)
+ 		}
+ 	}
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceSubsystem.cpp b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceSubsystem.cpp
+index 507add8..d917fe7 100644
+--- a/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceSubsystem.cpp
++++ b/Engine/Source/Runtime/Engine/Private/LevelInstance/LevelInstanceSubsystem.cpp
+@@ -61,6 +61,8 @@
+ 
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(LevelInstanceSubsystem)
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #define LOCTEXT_NAMESPACE "LevelInstanceSubsystem"
+ 
+ DEFINE_LOG_CATEGORY(LogLevelInstance);
+@@ -1347,6 +1349,10 @@ ILevelInstanceInterface* ULevelInstanceSubsystem::CreateLevelInstanceFrom(const
+ 	
+ 	TOptional<const UExternalDataLayerAsset*> CommonExternalDataLayerAsset;
+ 	FBox ActorLocationBox(ForceInit);
++#if UNREAL_4D_ENGINE_CHANGE
++	FVector ActorCentroid(ForceInit);
++	float ActorMinZ = FLT_MAX;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	for (const AActor* ActorToMove : ActorsToMove)
+ 	{
+ 		const bool bNonColliding = true;
+@@ -1367,6 +1373,12 @@ ILevelInstanceInterface* ULevelInstanceSubsystem::CreateLevelInstanceFrom(const
+ 		{
+ 			CommonExternalDataLayerAsset = nullptr;
+ 		}
++#if UNREAL_4D_ENGINE_CHANGE
++
++		const FVector ActorLocation = ActorToMove->GetActorLocation();
++		ActorCentroid += ActorLocation;
++		ActorMinZ = FMath::Min(ActorMinZ, ActorLocation.Z);
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	}
+ 
+ 	FVector LevelInstanceLocation;
+@@ -1381,11 +1393,16 @@ ILevelInstanceInterface* ULevelInstanceSubsystem::CreateLevelInstanceFrom(const
+ 	}
+ 	else
+ 	{
++#if UNREAL_4D_ENGINE_CHANGE
++		LevelInstanceLocation = !ActorsToMove.IsEmpty() ? (ActorCentroid / ActorsToMove.Num()) : FVector::ZeroVector;
++		LevelInstanceLocation.Z = ActorMinZ;
++#else
+ 		LevelInstanceLocation = ActorLocationBox.GetCenter();
+ 		if (CreationParams.PivotType == ELevelInstancePivotType::CenterMinZ)
+ 		{
+ 			LevelInstanceLocation.Z = ActorLocationBox.Min.Z;
+ 		}
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	}
+ 		
+ 	FString LevelFilename;
+@@ -1433,6 +1450,9 @@ ILevelInstanceInterface* ULevelInstanceSubsystem::CreateLevelInstanceFrom(const
+ 		CreateNewStreamingLevelParams.bEnableWorldPartitionStreaming = CreationParams.bEnableStreaming;
+ 		CreateNewStreamingLevelParams.ActorsToMove = &ActorsToMove;
+ 		CreateNewStreamingLevelParams.TemplateWorld = CreationParams.TemplateWorld,
++#if UNREAL_4D_ENGINE_CHANGE
++		CreateNewStreamingLevelParams.Transform.SetTranslation(-LevelInstanceLocation);
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 		CreateNewStreamingLevelParams.LevelStreamingCreatedCallback = [LevelInstanceActorGuid, ParentContainerInstance](ULevelStreaming* InLevelStreaming)
+ 		{
+ 			ULevelStreamingLevelInstanceEditor* LevelInstanceLevelStreaming = CastChecked<ULevelStreamingLevelInstanceEditor>(InLevelStreaming);
+@@ -3460,3 +3480,5 @@ bool ULevelInstanceSubsystem::FPropertyOverrideEdit::Save(ILevelInstanceInterfac
+ 
+ #undef LOCTEXT_NAMESPACE
+ 
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/LevelUtils.cpp b/Engine/Source/Runtime/Engine/Private/LevelUtils.cpp
+index 94c190e..ab3bed9 100644
+--- a/Engine/Source/Runtime/Engine/Private/LevelUtils.cpp
++++ b/Engine/Source/Runtime/Engine/Private/LevelUtils.cpp
+@@ -20,6 +20,8 @@
+ #include "WorldPartition/WorldPartitionSubsystem.h"
+ #endif
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #define LOCTEXT_NAMESPACE "LevelUtils"
+ 
+ 
+@@ -579,9 +581,18 @@ void FLevelUtils::ApplyLevelTransform(const FLevelUtils::FApplyLevelTransformPar
+ 		}
+ #endif // WITH_EDITOR
+ 
++#if !UNREAL_4D_ENGINE_CHANGE
+ 		TransformParams.Level->OnApplyLevelTransform.Broadcast(TransformParams.LevelTransform);
+ 		FWorldDelegates::PostApplyLevelTransform.Broadcast(TransformParams.Level, TransformParams.LevelTransform);
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	}
++
++#if UNREAL_4D_ENGINE_CHANGE
++	TransformParams.Level->OnApplyLevelTransform.Broadcast(TransformParams.LevelTransform);
++	FWorldDelegates::PostApplyLevelTransform.Broadcast(TransformParams.Level, TransformParams.LevelTransform);
++#endif // UNREAL_4D_ENGINE_CHANGE
+ }
+ 
+ #undef LOCTEXT_NAMESPACE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.cpp b/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.cpp
+index 0b35984..0655e3a 100644
+--- a/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.cpp
++++ b/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.cpp
+@@ -6,8 +6,14 @@
+ #include "LevelInstance/LevelInstanceComponent.h"
+ #include "WorldPartition/LevelInstance/LevelInstanceActorDesc.h"
+ 
++#if WITH_EDITOR
++#include "LevelInstance/LevelInstanceEditorInstanceActor.h"
++#endif
++
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(HLODOnlyLevelInstanceActor)
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ AWorldPartitionHLODOnlyLevelInstance::AWorldPartitionHLODOnlyLevelInstance(const FObjectInitializer& ObjectInitializer)
+ 	: Super(ObjectInitializer)
+ 	, LevelInstanceActorGuid(this)
+@@ -51,10 +57,22 @@ bool AWorldPartitionHLODOnlyLevelInstance::SetWorldAsset(TSoftObjectPtr<UWorld>
+ }
+ 
+ #if WITH_EDITOR
++#if UNREAL_4D_ENGINE_CHANGE
++ILevelInstanceComponentInterface* AWorldPartitionHLODOnlyLevelInstance::GetLevelInstanceComponent() const
++{
++	return Cast<ILevelInstanceComponentInterface>(RootComponent);
++}
++
++AActor* AWorldPartitionHLODOnlyLevelInstance::CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const
++{
++	return ALevelInstanceEditorInstanceActor::Create(LevelInstance, LoadedLevel);
++}
++#else
+ ULevelInstanceComponent* AWorldPartitionHLODOnlyLevelInstance::GetLevelInstanceComponent() const
+ {
+ 	return Cast<ULevelInstanceComponent>(RootComponent);
+ }
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ ELevelInstanceRuntimeBehavior AWorldPartitionHLODOnlyLevelInstance::GetDesiredRuntimeBehavior() const
+ {
+@@ -110,3 +128,5 @@ TUniquePtr<FWorldPartitionActorDesc> AWorldPartitionHLODOnlyLevelInstance::Creat
+ 	return TUniquePtr<FWorldPartitionActorDesc>(new FLevelInstanceActorDesc());
+ }
+ #endif
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/StandaloneHLODActor.cpp b/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/StandaloneHLODActor.cpp
+index b8907e3..f483c92 100644
+--- a/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/StandaloneHLODActor.cpp
++++ b/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/StandaloneHLODActor.cpp
+@@ -6,8 +6,14 @@
+ #include "LevelInstance/LevelInstanceComponent.h"
+ #include "WorldPartition/LevelInstance/LevelInstanceActorDesc.h"
+ 
++#if WITH_EDITOR
++#include "LevelInstance/LevelInstanceEditorInstanceActor.h"
++#endif
++
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(StandaloneHLODActor)
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ AWorldPartitionStandaloneHLOD::AWorldPartitionStandaloneHLOD(const FObjectInitializer& ObjectInitializer)
+ 	: Super(ObjectInitializer)
+ 	, LevelInstanceActorGuid(this)
+@@ -53,10 +59,22 @@ bool AWorldPartitionStandaloneHLOD::SetWorldAsset(TSoftObjectPtr<UWorld> InWorld
+ }
+ 
+ #if WITH_EDITOR
++#if UNREAL_4D_ENGINE_CHANGE
++ILevelInstanceComponentInterface* AWorldPartitionStandaloneHLOD::GetLevelInstanceComponent() const
++{
++	return Cast<ILevelInstanceComponentInterface>(RootComponent);
++}
++
++AActor* AWorldPartitionStandaloneHLOD::CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const
++{
++	return ALevelInstanceEditorInstanceActor::Create(LevelInstance, LoadedLevel);
++}
++#else
+ ULevelInstanceComponent* AWorldPartitionStandaloneHLOD::GetLevelInstanceComponent() const
+ {
+ 	return Cast<ULevelInstanceComponent>(RootComponent);
+ }
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ ELevelInstanceRuntimeBehavior AWorldPartitionStandaloneHLOD::GetDesiredRuntimeBehavior() const
+ {
+@@ -111,3 +129,5 @@ TUniquePtr<FWorldPartitionActorDesc> AWorldPartitionStandaloneHLOD::CreateClassA
+ 	return TUniquePtr<FWorldPartitionActorDesc>(new FLevelInstanceActorDesc());
+ }
+ #endif
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceActor.h b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceActor.h
+index af5002e..6842eb5 100644
+--- a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceActor.h
++++ b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceActor.h
+@@ -8,12 +8,15 @@
+ #include "Containers/Array.h"
+ #include "LevelInstance/LevelInstanceTypes.h"
+ #include "LevelInstance/LevelInstanceInterface.h"
++#include "LevelInstance/LevelInstanceComponent.h"
+ #include "LevelInstance/LevelInstanceActorImpl.h"
+ #include "LevelInstance/LevelInstanceActorGuid.h"
+ #include "LevelInstance/LevelInstancePropertyOverrideAsset.h"
+ #include "WorldPartition/WorldPartitionActorDesc.h"
+ #include "LevelInstanceActor.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ UCLASS(MinimalAPI)
+ class ALevelInstance : public AActor, public ILevelInstanceInterface
+ {
+@@ -70,7 +73,12 @@ public:
+ 
+ #if WITH_EDITOR
+ 	// Begin ILevelInstanceInterface
++#if UNREAL_4D_ENGINE_CHANGE
++	ENGINE_API virtual ILevelInstanceComponentInterface* GetLevelInstanceComponent() const override;
++	ENGINE_API virtual AActor* CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const override;
++#else
+ 	ENGINE_API virtual ULevelInstanceComponent* GetLevelInstanceComponent() const override;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	ENGINE_API virtual bool SetWorldAsset(TSoftObjectPtr<UWorld> WorldAsset) override;
+ 	virtual ELevelInstanceRuntimeBehavior GetDesiredRuntimeBehavior() const override { return DesiredRuntimeBehavior; }
+ 	ENGINE_API void SetDesiredRuntimeBehavior(ELevelInstanceRuntimeBehavior NewBehavior) override;
+@@ -129,3 +137,5 @@ private:
+ };
+ 
+ DEFINE_ACTORDESC_TYPE(ALevelInstance, FLevelInstanceActorDesc);
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponent.h b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponent.h
+index f8b8a54..faeed73 100644
+--- a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponent.h
++++ b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponent.h
+@@ -8,8 +8,12 @@
+ #include "WorldPartition/WorldPartitionActorContainerID.h"
+ #include "LevelInstance/LevelInstanceTypes.h"
+ 
++#include "LevelInstance/LevelInstanceComponentInterface.h"
++
+ #include "LevelInstanceComponent.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ /**
+  * ULevelInstanceComponent subclasses USceneComponent for Editing purposes so that we can have a proxy to the LevelInstanceActor's RootComponent transform without attaching to it.
+  *
+@@ -23,6 +27,10 @@
+  */
+ UCLASS(MinimalAPI)
+ class ULevelInstanceComponent : public USceneComponent
++// UHT must see the interface inheritance.
++#if !CPP || UNREAL_4D_ENGINE_CHANGE
++	, public ILevelInstanceComponentInterface
++#endif // UNREAL_4D_ENGINE_CHANGE
+ {
+ 	GENERATED_UCLASS_BODY()
+ public:
+@@ -39,6 +47,9 @@ public:
+ 	ENGINE_API virtual void OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) override;
+ 
+ 	ENGINE_API void UpdateEditorInstanceActor();
++#if UNREAL_4D_ENGINE_CHANGE
++	ENGINE_API void AbandonEditorInstanceActor() { CachedEditorInstanceActorPtr.Reset(); }
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	ENGINE_API void OnEdit();
+ 	ENGINE_API void OnEditOverrides();
+ 	ENGINE_API void OnCommit();
+@@ -82,3 +93,5 @@ private:
+ 	bool bWasDirtyBeforeEditFilterChange;
+ #endif
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponentInterface.h b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponentInterface.h
+new file mode 100644
+index 0000000..4d48b24 100644
+--- /dev/null
++++ b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceComponentInterface.h
+@@ -0,0 +1,43 @@
++#pragma once
++
++#include "CoreMinimal.h"
++#include "UObject/Interface.h"
++#include "WorldPartition/WorldPartitionActorContainerID.h"
++
++#include "LevelInstanceComponentInterface.generated.h"
++
++#define UNREAL_4D_ENGINE_CHANGE 1
++
++// UHT must see the reflected interface declarations.
++#if !CPP || UNREAL_4D_ENGINE_CHANGE
++struct FWorldPartitionActorFilter;
++
++UINTERFACE(MinimalAPI)
++class ULevelInstanceComponentInterface
++	: public UInterface
++{
++	GENERATED_BODY()
++};
++
++class ILevelInstanceComponentInterface
++{
++	GENERATED_BODY()
++
++public:
++#if WITH_EDITOR
++	virtual void UpdateEditorInstanceActor() = 0;
++	virtual void AbandonEditorInstanceActor() = 0;
++	virtual const FWorldPartitionActorFilter& GetFilter() const = 0;
++	virtual void SetFilter(const FWorldPartitionActorFilter& InFilter, bool bNotify = true) = 0;
++	virtual void UpdateEditFilter() = 0;
++	virtual void ClearCachedFilter() = 0;
++	virtual const TMap<FActorContainerID, TSet<FGuid>>& GetFilteredActorsPerContainer() const = 0;
++	virtual void OnEdit() = 0;
++	virtual void OnEditOverrides() = 0;
++	virtual void OnCommit() = 0;
++	virtual void OnCommitOverrides() = 0;
++#endif // WITH_EDITOR
++};
++#endif // UNREAL_4D_ENGINE_CHANGE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceInterface.h b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceInterface.h
+index 4ca909c..58b2dd2 100644
+--- a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceInterface.h
++++ b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceInterface.h
+@@ -11,7 +11,13 @@
+ #include "LevelInstance/LevelInstancePropertyOverrideAsset.h"
+ #include "LevelInstanceInterface.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
++#if UNREAL_4D_ENGINE_CHANGE
++class ILevelInstanceComponentInterface;
++#else
+ class ULevelInstanceComponent;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ class ULevelStreamingLevelInstance;
+ 
+ UINTERFACE(BlueprintType, meta = (CannotImplementInterfaceInBlueprint), MinimalAPI)
+@@ -51,7 +57,13 @@ class ILevelInstanceInterface
+ 		
+ 	virtual ULevelInstancePropertyOverrideAsset* GetPropertyOverrideAsset() const { return nullptr; }
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	virtual ILevelInstanceComponentInterface* GetLevelInstanceComponent() const = 0;
++
++	virtual AActor* CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const = 0;
++#else
+ 	virtual ULevelInstanceComponent* GetLevelInstanceComponent() const = 0;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ 	virtual ELevelInstanceRuntimeBehavior GetDesiredRuntimeBehavior() const = 0;
+ 
+@@ -174,3 +186,5 @@ private:
+ 	virtual void SetPropertyOverrideAsset(ULevelInstancePropertyOverrideAsset* InPropertyOverride) {}
+ #endif
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceLevelStreaming.h b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceLevelStreaming.h
+index 62aceaf..ea2911f 100644
+--- a/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceLevelStreaming.h
++++ b/Engine/Source/Runtime/Engine/Public/LevelInstance/LevelInstanceLevelStreaming.h
+@@ -13,6 +13,8 @@
+ 
+ #include "LevelInstanceLevelStreaming.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ class ILevelInstanceInterface;
+ class ALevelInstanceEditorInstanceActor;
+ 
+@@ -65,7 +67,11 @@ private:
+ 
+ 	bool IsEditorWorldMode() const;
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	TWeakObjectPtr<AActor> LevelInstanceEditorInstanceActor;
++#else
+ 	TWeakObjectPtr<ALevelInstanceEditorInstanceActor> LevelInstanceEditorInstanceActor;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ 	mutable FTransform CachedTransform;
+ 	mutable FBox CachedBounds;
+@@ -73,3 +79,5 @@ private:
+ #endif
+ 	FLevelInstanceID LevelInstanceID;
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.h b/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.h
+index 142ae2d..a6747f2 100644
+--- a/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.h
++++ b/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/HLODOnlyLevelInstanceActor.h
+@@ -7,6 +7,8 @@
+ #include "LevelInstance/LevelInstanceInterface.h"
+ #include "HLODOnlyLevelInstanceActor.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ UCLASS(MinimalAPI, HideCategories=(Rendering, Replication, Collision, Physics, Navigation, Networking, Input, Actor, LevelInstance, HLOD, WorldPartition, Cooking, DataLayers))
+ class AWorldPartitionHLODOnlyLevelInstance : public AActor, public ILevelInstanceInterface
+ {
+@@ -24,7 +26,12 @@ public:
+ 	ENGINE_API virtual bool SetWorldAsset(TSoftObjectPtr<UWorld> InWorldAsset) override;
+ 
+ #if WITH_EDITOR
++#if UNREAL_4D_ENGINE_CHANGE
++	ENGINE_API virtual ILevelInstanceComponentInterface* GetLevelInstanceComponent() const override;
++	ENGINE_API virtual AActor* CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const override;
++#else
+ 	ENGINE_API virtual ULevelInstanceComponent* GetLevelInstanceComponent() const override;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	ENGINE_API virtual ELevelInstanceRuntimeBehavior GetDesiredRuntimeBehavior() const override;
+ 	ENGINE_API virtual ELevelInstanceRuntimeBehavior GetDefaultRuntimeBehavior() const override;
+ 	ENGINE_API virtual bool HasStandaloneHLOD() const override;
+@@ -56,4 +63,6 @@ protected:
+ private:
+ 	FLevelInstanceActorGuid LevelInstanceActorGuid;
+ 	FLevelInstanceActorImpl LevelInstanceActorImpl;
+-};
+\ No newline at end of file
++};
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/StandaloneHLODActor.h b/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/StandaloneHLODActor.h
+index 4268996..ab88cee 100644
+--- a/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/StandaloneHLODActor.h
++++ b/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/StandaloneHLODActor.h
+@@ -7,6 +7,8 @@
+ #include "LevelInstance/LevelInstanceInterface.h"
+ #include "StandaloneHLODActor.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ UCLASS(NotPlaceable, MinimalAPI, HideCategories=(Rendering, Replication, Collision, Physics, Navigation, Networking, Input, Actor, LevelInstance, Cooking))
+ class AWorldPartitionStandaloneHLOD : public AActor, public ILevelInstanceInterface
+ {
+@@ -24,7 +26,12 @@ public:
+ 	ENGINE_API virtual bool SetWorldAsset(TSoftObjectPtr<UWorld> InWorldAsset) override;
+ 
+ #if WITH_EDITOR
++#if UNREAL_4D_ENGINE_CHANGE
++	ENGINE_API virtual ILevelInstanceComponentInterface* GetLevelInstanceComponent() const override;
++	ENGINE_API virtual AActor* CreateLevelInstanceEditorInstance(ILevelInstanceInterface* LevelInstance, ULevel* LoadedLevel) const override;
++#else
+ 	ENGINE_API virtual ULevelInstanceComponent* GetLevelInstanceComponent() const override;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 	ENGINE_API virtual ELevelInstanceRuntimeBehavior GetDesiredRuntimeBehavior() const override;
+ 	ENGINE_API virtual ELevelInstanceRuntimeBehavior GetDefaultRuntimeBehavior() const override;
+ #endif // WITH_EDITOR
+@@ -56,4 +63,6 @@ protected:
+ private:
+ 	FLevelInstanceActorGuid LevelInstanceActorGuid;
+ 	FLevelInstanceActorImpl LevelInstanceActorImpl;
+-};
+\ No newline at end of file
++};
++
++#undef UNREAL_4D_ENGINE_CHANGE

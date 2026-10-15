@@ -4,10 +4,16 @@ Several of the features in Unreal 4D require patches to the Unreal Engine source
 
 You can find patches in the following subdirectories:
 
-- `UE5` - Patches for Unreal Engine 5.x versions.
-- `UE6` - Patches for Unreal Engine 6.x versions.
+- `UE5-main` - Patches for Unreal Engine 5 main branch.
+- `UE6-main` - Patches for Unreal Engine 6 main branch.
+- `UE5.7` - Patches for the Unreal Engine 5.7 branch.
+- `UE5.8` - Patches for the Unreal Engine 5.8 branch.
 
-Also, if you have access to the EpicGames organization on GitHub, please thumbs up aaronfranke's pull requests, which propose adding some of these patches upstream to the Unreal Engine source code, when those patches are applicable to the base engine for 3D games. https://github.com/EpicGames/UnrealEngine/pulls/aaronfranke
+If you have access to the EpicGames organization on GitHub:
+
+- You can find Git branches with these patches pre-applied here: https://github.com/aaronfranke/UnrealEngine/branches/all?query=unreal4d%2Fue
+
+- Please thumbs up aaronfranke's pull requests, which propose adding some of these patches upstream to the Unreal Engine source code, when those patches are also applicable to the base engine for 3D games. https://github.com/EpicGames/UnrealEngine/pulls/aaronfranke
 
 ## License
 

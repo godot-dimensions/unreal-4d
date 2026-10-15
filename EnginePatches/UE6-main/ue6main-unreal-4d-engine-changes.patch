@@ -1,0 +1,908 @@
+diff --git a/Engine/Source/Editor/Experimental/EditorInteractiveToolsFramework/Private/EditorInteractiveGizmoSelectionBuilder.cpp b/Engine/Source/Editor/Experimental/EditorInteractiveToolsFramework/Private/EditorInteractiveGizmoSelectionBuilder.cpp
+index 989488f..d71e5b9 100644
+--- a/Engine/Source/Editor/Experimental/EditorInteractiveToolsFramework/Private/EditorInteractiveGizmoSelectionBuilder.cpp
++++ b/Engine/Source/Editor/Experimental/EditorInteractiveToolsFramework/Private/EditorInteractiveGizmoSelectionBuilder.cpp
+@@ -17,6 +17,8 @@
+ 
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(EditorInteractiveGizmoSelectionBuilder)
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ class USceneComponent;
+ 
+ UTransformProxy* FEditorGizmoSelectionBuilderHelper::CreateTransformProxyForSelection(const FToolBuilderState& SceneState)
+@@ -41,8 +43,15 @@ UTransformProxy* FEditorGizmoSelectionBuilderHelper::CreateTransformProxyForSele
+ 								if (AActor* Actor = ObjectTypedElement.GetObjectAs<AActor>())
+ 								{
+ 									USceneComponent* SceneComponent = Actor->GetRootComponent();
+-									TransformProxy->AddComponent(SceneComponent);
+-									bHasSelectedElements = true;
++#if UNREAL_4D_ENGINE_CHANGE
++									if (SceneComponent != nullptr)
++									{
++#endif // UNREAL_4D_ENGINE_CHANGE
++										TransformProxy->AddComponent(SceneComponent);
++										bHasSelectedElements = true;
++#if UNREAL_4D_ENGINE_CHANGE
++									}
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 								}
+ 							}
+ 						}
+@@ -59,4 +68,5 @@ UTransformProxy* FEditorGizmoSelectionBuilderHelper::CreateTransformProxyForSele
+ 
+ 	return nullptr;
+ }
+-	
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/Kismet/Private/SCSEditorViewportClient.cpp b/Engine/Source/Editor/Kismet/Private/SCSEditorViewportClient.cpp
+index dde6778..a24dbdd 100644
+--- a/Engine/Source/Editor/Kismet/Private/SCSEditorViewportClient.cpp
++++ b/Engine/Source/Editor/Kismet/Private/SCSEditorViewportClient.cpp
+@@ -22,6 +22,7 @@
+ #include "Editor/EditorEngine.h"
+ #include "Editor/EditorPerProjectUserSettings.h"
+ #include "Editor/UnrealEdEngine.h"
++#include "EditorModeManager.h"
+ #include "EditorViewportSelectability.h"
+ #include "EditorComponents.h"
+ #include "EditorViewportSelectabilityBridge.h"
+@@ -80,6 +81,8 @@
+ #include "UnrealWidget.h"
+ #include "Widgets/SWidget.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ struct FSubobjectDataHandle;
+ 
+ DEFINE_LOG_CATEGORY_STATIC(LogSCSEditorViewport, Log, All);
+@@ -885,11 +888,21 @@ UE::Widget::EWidgetMode FSCSEditorViewportClient::GetWidgetMode() const
+ void FSCSEditorViewportClient::SetWidgetMode( UE::Widget::EWidgetMode NewMode )
+ {
+ 	WidgetMode = NewMode;
++#if UNREAL_4D_ENGINE_CHANGE
++	// Inform ModeTools of the widget mode change to support InteractiveToolsFramework-based gizmos.
++	ModeTools->SetWidgetMode(NewMode);
++	ModeTools->BroadcastWidgetModeChanged(NewMode);
++#endif
+ }
+ 
+ void FSCSEditorViewportClient::SetWidgetCoordSystemSpace( ECoordSystem NewCoordSystem ) 
+ {
+ 	WidgetCoordSystem = NewCoordSystem;
++#if UNREAL_4D_ENGINE_CHANGE
++	// Inform ModeTools of the coord system change to support InteractiveToolsFramework-based gizmos.
++	ModeTools->SetCoordSystem(NewCoordSystem);
++	ModeTools->BroadcastCoordSystemChanged(NewCoordSystem);
++#endif
+ }
+ 
+ FVector FSCSEditorViewportClient::GetWidgetLocation() const
+@@ -1288,3 +1301,5 @@ void FSCSEditorViewportClient::UpdateHoverFromHitProxy(HHitProxy* const InHitPro
+ 		MouseCursor.Reset();
+ 	}
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.cpp b/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.cpp
+index 9da4c6c..9891c69 100644
+--- a/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.cpp
++++ b/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.cpp
+@@ -50,6 +50,8 @@
+ #include "Widgets/SCompoundWidget.h"
+ #include "Widgets/SOverlay.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ class FDragDropEvent;
+ class SDockTab;
+ class SWidget;
+@@ -135,6 +137,27 @@ void SSCSEditorViewport::Construct(const FArguments& InArgs)
+ 	RequestRefresh(true);
+ }
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++void SSCSEditorViewport::AddOverlayWidget(TSharedRef<SWidget> OverlaidWidget, int32 ZOrder)
++{
++	if (ViewportOverlay.IsValid())
++	{
++		ViewportOverlay->AddSlot(ZOrder)
++		[
++			OverlaidWidget
++		];
++	}
++}
++
++void SSCSEditorViewport::RemoveOverlayWidget(TSharedRef<SWidget> OverlaidWidget)
++{
++	if (ViewportOverlay.IsValid())
++	{
++		ViewportOverlay->RemoveSlot(OverlaidWidget);
++	}
++}
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ SSCSEditorViewport::~SSCSEditorViewport()
+ {
+ 	UEditorEngine* Editor = (UEditorEngine*)GEngine;
+@@ -481,3 +504,5 @@ EActiveTimerReturnType SSCSEditorViewport::DeferredUpdatePreview(double InCurren
+ }
+ 
+ #undef LOCTEXT_NAMESPACE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.h b/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.h
+index 3bee31e..4dec194 100644
+--- a/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.h
++++ b/Engine/Source/Editor/Kismet/Private/SSCSEditorViewport.h
+@@ -9,6 +9,8 @@
+ #include "Types/SlateEnums.h"
+ #include "Widgets/DeclarativeSyntaxSupport.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ class FDragDropEvent;
+ class SDockTab;
+ struct FGeometry;
+@@ -31,6 +33,14 @@ public:
+ 	 */
+ 	void Construct(const FArguments& InArgs);
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	/** Adds an overlay widget on top of the preview viewport content. */
++	virtual void AddOverlayWidget(TSharedRef<SWidget> OverlaidWidget, int32 ZOrder = INDEX_NONE);
++
++	/** Removes an overlay widget previously added with AddOverlayWidget. */
++	virtual void RemoveOverlayWidget(TSharedRef<SWidget> OverlaidWidget);
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ 	/**
+ 	 * Destructor.
+ 	 */
+@@ -124,3 +134,5 @@ private:
+ 	/** Pre-configured mode tools for the viewport (optional) */
+ 	TSharedPtr<class FEditorModeTools> ModeTools;
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/PropertyEditor/Private/DetailLayoutBuilderImpl.cpp b/Engine/Source/Editor/PropertyEditor/Private/DetailLayoutBuilderImpl.cpp
+index f686621..0d1e3b6 100644
+--- a/Engine/Source/Editor/PropertyEditor/Private/DetailLayoutBuilderImpl.cpp
++++ b/Engine/Source/Editor/PropertyEditor/Private/DetailLayoutBuilderImpl.cpp
+@@ -12,6 +12,8 @@
+ #include "PropertyHandleImpl.h"
+ #include "StructurePropertyNode.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ namespace DetailLayoutBuilderImpl_Local
+ {
+ 	/**
+@@ -997,6 +999,18 @@ bool FDetailLayoutBuilderImpl::IsPropertyVisible( TSharedRef<IPropertyHandle> Pr
+ 		if (TSharedPtr<IDetailsViewPrivate> DetailsViewPinned = DetailsView.Pin())
+ 		{
+ 			TSharedPtr<FPropertyNode> PropertyNode = StaticCastSharedRef<FPropertyHandleBase>(PropertyHandle)->GetPropertyNode();
++
++#if UNREAL_4D_ENGINE_CHANGE
++			// NOTE: External structure properties are not editable due to SKismetInspector::IsPropertyVisible not properly accounting for them.
++			if (PropertyNode.IsValid())
++			{
++				if (FStructurePropertyNode* StructPropertyNode = PropertyNode->FindStructureItemParent())
++				{
++					return true;
++				}
++			}
++#endif
++
+ 			const FCategoryPropertyNode* CategoryNode = PropertyNode.IsValid() ? PropertyNode->AsCategoryNode() : nullptr;
+ 			if (CategoryNode != nullptr)
+ 			{
+@@ -1297,3 +1311,5 @@ bool FDetailLayoutBuilderImpl::AddEmptyCategoryIfNeeded(TSharedPtr<FComplexPrope
+ 	}
+ 	return false;
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/PropertyEditor/Private/DetailPropertyRow.cpp b/Engine/Source/Editor/PropertyEditor/Private/DetailPropertyRow.cpp
+index 68dffda..ba9fbf8 100644
+--- a/Engine/Source/Editor/PropertyEditor/Private/DetailPropertyRow.cpp
++++ b/Engine/Source/Editor/PropertyEditor/Private/DetailPropertyRow.cpp
+@@ -21,6 +21,8 @@
+ 
+ #define LOCTEXT_NAMESPACE	"DetailPropertyRow"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ FDetailPropertyRow::FDetailPropertyRow(TSharedPtr<FPropertyNode> InPropertyNode, TSharedRef<FDetailCategoryImpl> InParentCategory, TSharedPtr<FComplexPropertyNode> InExternalRootNode)
+ 	: PropertyNode( InPropertyNode )
+ 	, ParentCategory( InParentCategory )
+@@ -490,7 +492,12 @@ void FDetailPropertyRow::GenerateChildrenForPropertyNode( TSharedPtr<FPropertyNo
+ 					GenerateChildrenForPropertyNode( ChildNode, OutChildren );
+ 				}
+ 				// Only struct children can have custom visibility that is different from their parent.
++#if UNREAL_4D_ENGINE_CHANGE
++				// NOTE: External structure properties are not editable due to SKismetInspector::IsPropertyVisible not properly accounting for them.
++				else if ( !bStructProperty || HasExternalProperty() || LayoutBuilder.IsPropertyVisible(FPropertyAndParent(ChildNode.ToSharedRef())) )
++#else
+ 				else if ( !bStructProperty || LayoutBuilder.IsPropertyVisible(FPropertyAndParent(ChildNode.ToSharedRef())) )
++#endif
+ 				{	
+ 					TArray<TSharedRef<FDetailTreeNode>> PropNodes;
+ 					bool bHasKeyNode = false;
+@@ -1220,4 +1227,6 @@ void FDetailPropertyRow::MakeValueWidget( FDetailWidgetRow& Row, const TSharedPt
+ 		];
+ }
+ 
++#undef UNREAL_4D_ENGINE_CHANGE
++
+ #undef LOCTEXT_NAMESPACE
+diff --git a/Engine/Source/Editor/UnrealEd/Private/EditorServer.cpp b/Engine/Source/Editor/UnrealEd/Private/EditorServer.cpp
+index 29472a0..e22f8fb 100644
+--- a/Engine/Source/Editor/UnrealEd/Private/EditorServer.cpp
++++ b/Engine/Source/Editor/UnrealEd/Private/EditorServer.cpp
+@@ -185,6 +185,8 @@
+ #include "Serialization/Formatters/JsonArchiveInputFormatter.h"
+ #include "Serialization/LoadTimeTrace.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ DEFINE_LOG_CATEGORY_STATIC(LogEditorServer, Log, All);
+ 
+ /** Used for the "tagsounds" and "checksounds" commands only			*/
+@@ -2701,6 +2703,17 @@ bool UEditorEngine::Map_Load(const TCHAR* Str, FOutputDevice& Ar)
+ 				FeatureLevelIndex = FMath::Clamp(FeatureLevelIndex, 0, (int32)ERHIFeatureLevel::Num);
+ 				ERHIFeatureLevel::Type FeatureLevel = (ERHIFeatureLevel::Type)FeatureLevelIndex;
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++				// A map redirector can load its destination as an inactive world before WorldTypePreLoadMap applies.
++				// Reinitialize it for the editor before streaming creates collections without a persistent level.
++				if (World->IsInitialized() && World->GetActiveLevelCollection() == nullptr)
++				{
++					World->CleanupWorld(false, true, World);
++					World->SetFeatureLevel(FeatureLevel);
++					World->InitWorld(GetEditorWorldInitializationValues());
++				}
++				else
++#endif
+ 				if (World->HasEverBeenInitialized())
+ 				{
+ 					// We do not handle reinitializing. If the World was initialized during Load, we require that it is still fully initialized
+@@ -7359,3 +7372,5 @@ void UEditorEngine::AutoMergeStaticMeshes()
+ 	}
+ #endif // #if TODO_STATICMESH
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/UnrealEd/Private/LevelEditorViewport.cpp b/Engine/Source/Editor/UnrealEd/Private/LevelEditorViewport.cpp
+index 4ef881f..d936201 100644
+--- a/Engine/Source/Editor/UnrealEd/Private/LevelEditorViewport.cpp
++++ b/Engine/Source/Editor/UnrealEd/Private/LevelEditorViewport.cpp
+@@ -121,6 +121,8 @@
+ #include "ViewportInteractions/ViewportInteractionsBehaviorSource.h"
+ #include "ViewportInteractions/ViewportInteractionsUtilities.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ DEFINE_LOG_CATEGORY(LogEditorViewport);
+ 
+ #define LOCTEXT_NAMESPACE "LevelEditorViewportClient"
+@@ -1857,6 +1859,11 @@ bool FLevelEditorViewportClient::UpdateDropPreviewElements(int32 MouseX, int32 M
+ 			DestinationTransform.SetScale3D(PreviousTransform.GetScale3D());		// preserve scaling
+ 
+ 			WorldInterface.SetWorldTransform(DestinationTransform);
++#if UNREAL_4D_ENGINE_CHANGE
++			// Broadcast transform update for preview elements only (preview actors only).
++			// However, this line is insufficient for the final dropped placement (see below UNREAL_4D_ENGINE_CHANGE).
++			OnDropElementTransformUpdatedDelegate.Broadcast(Actor, Element, DestinationTransform);
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 		}
+ 
+ 		if (Actor)
+@@ -2361,6 +2368,47 @@ bool FLevelEditorViewportClient::DropObjectsAtCoordinates(int32 MouseX, int32 Mo
+ 			//SetFocus( static_cast<HWND>( Viewport->GetWindow() ) );
+ 
+ 			SetCurrentViewport();
++
++#if UNREAL_4D_ENGINE_CHANGE
++			// Recalculate the transform for all newly placed elements and broadcast the updates.
++			// Unreal 4D's FUnreal4DEditorMode::OnDropElementTransformUpdated uses the snapped 3D
++			// transform to update the actor's UScene4DComponent root. Preview notifications alone
++			// do not cover the final placement, so notify the editor mode after applying it here.
++			// This may seem like a giant unnecessary engine change, because surely Unreal already
++			// has code to do this somewhere, right? But I cannot find it anywhere.
++			if (OutNewElements.Num() > 0 && !Options.bCreateDropPreview && bResult)
++			{
++				UTypedElementRegistry* Registry = UTypedElementRegistry::GetInstance();
++				for (const FTypedElementHandle& Element : OutNewElements)
++				{
++					AActor* Actor = nullptr;
++					UActorFactory* ActorFactoryToUse = nullptr;
++					if (auto ObjectElement = Registry->GetElement<ITypedElementObjectInterface>(Element))
++					{
++						Actor = Cast<AActor>(ObjectElement.GetObject());
++					}
++					if (Actor != nullptr)
++					{
++						// Find the actor factory for this actor (same as in UpdateDropPreviewElements).
++						ActorFactoryToUse = GEditor->FindActorFactoryForActorClass(Actor->GetClass());
++						// This code uses the same logic as the preview update (see above UNREAL_4D_ENGINE_CHANGE).
++						FSnappedPositioningData PositioningData = FSnappedPositioningData(this, TraceResult.Location, TraceResult.SurfaceNormal)
++							.DrawSnapHelpers(true)
++							.UseStartTransform(Actor->GetActorTransform())
++							.UseFactory(ActorFactoryToUse)
++							.UsePlacementExtent(Actor->GetPlacementExtent());
++						FTransform DestinationTransform = FActorPositioning::GetSnappedSurfaceAlignedTransform(PositioningData);
++						// Apply the calculated transform to the actor.
++						if (auto WorldElement = Registry->GetElement<ITypedElementWorldInterface>(Element))
++						{
++							WorldElement.SetWorldTransform(DestinationTransform);
++							// Broadcast with the calculated transform (source of truth).
++							OnDropElementTransformUpdatedDelegate.Broadcast(Actor, Element, DestinationTransform);
++						}
++					}
++				}
++			}
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 		}
+ 	}
+ 
+@@ -6478,3 +6526,5 @@ void FLevelEditorViewportClient::DuplicateSelection(bool bInSelectNewElements)
+ }
+ 
+ #undef LOCTEXT_NAMESPACE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/UnrealEd/Private/Selection.cpp b/Engine/Source/Editor/UnrealEd/Private/Selection.cpp
+index c6b8e36..78f59a5 100644
+--- a/Engine/Source/Editor/UnrealEd/Private/Selection.cpp
++++ b/Engine/Source/Editor/UnrealEd/Private/Selection.cpp
+@@ -14,6 +14,8 @@
+ #include "Templates/UnrealTemplate.h"
+ #include "Editor.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(Selection)
+ 
+ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
+@@ -168,6 +170,13 @@ bool USelection::IsBatchSelecting() const
+ 	return ElementSelectionSet && ElementSelectionSet->Legacy_GetElementListSync().IsRunningBatchOperation();
+ }
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++bool USelection::CanSelectAnything() const
++{
++	return SelectionElementBridge != nullptr && ElementSelectionSet != nullptr;
++}
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ bool USelection::IsValidObjectToSelect(const UObject* InObject) const
+ {
+ 	bool bIsValid = SelectionElementBridge->IsValidObjectType(InObject);
+@@ -399,3 +408,5 @@ FDeselectedActorsEvent::~FDeselectedActorsEvent()
+ 		}
+ 	}
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/UnrealEd/Public/LevelEditorViewport.h b/Engine/Source/Editor/UnrealEd/Public/LevelEditorViewport.h
+index 64081ef..c52c736 100644
+--- a/Engine/Source/Editor/UnrealEd/Public/LevelEditorViewport.h
++++ b/Engine/Source/Editor/UnrealEd/Public/LevelEditorViewport.h
+@@ -17,6 +17,8 @@
+ #include "Elements/Framework/TypedElementListFwd.h"
+ #include "ViewportHoverEffects.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ struct FAssetData;
+ struct FMinimalViewInfo;
+ class FCanvas;
+@@ -32,6 +34,12 @@ class UTypedElementSelectionSet;
+ struct FWorldContext;
+ struct FGizmoState;
+ enum class ECameraSpaceNudgeDirection : uint8;
++
++#if UNREAL_4D_ENGINE_CHANGE
++/** Delegate fired when a drop element's transform is updated during drag or drop */
++DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnDropElementTransformUpdated, AActor*, const FTypedElementHandle&, const FTransform&);
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ namespace UE::Positioning
+ {
+ 	class FDepthCapture;
+@@ -483,6 +491,11 @@ public:
+ 		TScriptInterface<IAssetFactoryInterface> Factory = nullptr) override;
+ 	UNREALED_API virtual void DestroyDropPreviewElements() override;
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	/** Delegate fired when drop element transforms are updated during drag or drop. */
++	FOnDropElementTransformUpdated& OnDropElementTransformUpdated() { return OnDropElementTransformUpdatedDelegate; }
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ 	/**
+ 	 * Checks the viewport to see if the given object can be dropped using the given mouse coordinates local to this viewport
+ 	 *
+@@ -1032,6 +1045,11 @@ private:
+ 	static UNREALED_API TWeakPtr<FTypedElementList> StaticDropPreviewElements;
+ 	TSharedPtr<FTypedElementList> DropPreviewElements;
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	/** Delegate fired when drop element transforms are updated. */
++	FOnDropElementTransformUpdated OnDropElementTransformUpdatedDelegate;
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ 	/** If currently creating a preview actor. */
+ 	static UNREALED_API bool bIsDroppingPreviewActor;
+ 
+@@ -1128,3 +1146,5 @@ private:
+ 	/** Fired when an element is locked to / unlocked from the viewport by cinematic tools like Sequencer */
+ 	FSimpleMulticastDelegate CinematicLockChangedDelegate;
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Editor/UnrealEd/Public/Selection.h b/Engine/Source/Editor/UnrealEd/Public/Selection.h
+index 591e879..8d01ae0 100644
+--- a/Engine/Source/Editor/UnrealEd/Public/Selection.h
++++ b/Engine/Source/Editor/UnrealEd/Public/Selection.h
+@@ -26,6 +26,8 @@
+ 
+ #include "Selection.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ class FArchive;
+ class ISelectionElementBridge;
+ class UTypedElementSelectionSet;
+@@ -106,6 +108,13 @@ public:
+ 	 */
+ 	UNREALED_API bool IsBatchSelecting() const;
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	/**
++	 * @return	Returns whether or not the USelection's internal data is initialized and capable of receiving any selections of any kind.
++	 */
++	UNREALED_API bool CanSelectAnything() const;
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ 	/**
+ 	 * Selects the specified object.
+ 	 *
+@@ -507,3 +516,5 @@ public:
+ private:
+ 	const TArray<AActor*>& DeselectedActors;
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Engine/Private/PhysicsEngine/BodySetup.cpp b/Engine/Source/Runtime/Engine/Private/PhysicsEngine/BodySetup.cpp
+index 65ed8c8..4b79af6 100644
+--- a/Engine/Source/Runtime/Engine/Private/PhysicsEngine/BodySetup.cpp
++++ b/Engine/Source/Runtime/Engine/Private/PhysicsEngine/BodySetup.cpp
+@@ -59,6 +59,8 @@
+ 
+ #define LOCTEXT_NAMESPACE "PhysicsAsset"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ 
+ FCookBodySetupInfo::FCookBodySetupInfo() :
+ 	bCookNonMirroredConvex(false),
+@@ -586,6 +588,10 @@ bool UBodySetup::ProcessFormatData_Chaos(FByteBulkData* FormatData)
+ 
+ bool UBodySetup::RuntimeCookPhysics_Chaos()
+ {
++#if UNREAL_4D_ENGINE_CHANGE
++	SCOPED_NAMED_EVENT_TCHAR(ANSI_TO_PROFILING(__FUNCTION__), FColor::White);
++#endif
++
+ 	Chaos::FCookHelper Cooker(this);
+ 	Cooker.Cook();
+ 	FinishCreatingPhysicsMeshes_Chaos(Cooker);
+@@ -2545,5 +2551,7 @@ void FBodySetupObjectTextFactory::ProcessConstructedObject(UObject* NewObject)
+ 
+ #endif // WITH_EDITOR
+ 
++#undef UNREAL_4D_ENGINE_CHANGE
++
+ #undef LOCTEXT_NAMESPACE
+ 
+diff --git a/Engine/Source/Runtime/Engine/Private/StaticMesh.cpp b/Engine/Source/Runtime/Engine/Private/StaticMesh.cpp
+index f190812..51f5f7a 100644
+--- a/Engine/Source/Runtime/Engine/Private/StaticMesh.cpp
++++ b/Engine/Source/Runtime/Engine/Private/StaticMesh.cpp
+@@ -115,6 +115,8 @@
+ #include "Materials/Material.h"
+ #endif
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ #define LOCTEXT_NAMESPACE "StaticMesh"
+ DEFINE_LOG_CATEGORY(LogStaticMesh);	
+ 
+@@ -4210,6 +4212,14 @@ static FString BuildStaticMeshDerivedDataKeySuffix(const ITargetPlatform* Target
+ 		KeySuffix.Appendf(TEXT("%s_"), *LexToString(NaniteMeshKey.Hash));
+ 	}
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	if (Mesh->bDoFastBuild)
++	{
++		// Separate fast builds from MeshBuilder results and invalidate cached uninitialized bounds.
++		KeySuffix += TEXT("_FastBuildBoundsV1");
++	}
++#endif // UNREAL_4D_ENGINE_CHANGE
++
+ 	// Add LightmapUVVersion to key going forward
+ 	if ( (ELightmapUVVersion)Mesh->GetLightmapUVVersion() > ELightmapUVVersion::BitByBit )
+ 	{
+@@ -11635,3 +11645,5 @@ FStaticMeshCompilationContext::FStaticMeshCompilationContext()
+ }
+ 
+ #undef LOCTEXT_NAMESPACE
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/CollisionConvexMesh.cpp b/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/CollisionConvexMesh.cpp
+index bdf1c74..3d20e62 100644
+--- a/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/CollisionConvexMesh.cpp
++++ b/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/CollisionConvexMesh.cpp
+@@ -4,6 +4,8 @@
+ #include "HAL/IConsoleManager.h"
+ #include "CompGeom/ConvexHull3.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ namespace Chaos
+ {
+ 	// CVars variables for controlling geometry complexity checking and simplification 
+@@ -114,6 +116,10 @@ namespace Chaos
+ 
+ 	void FConvexBuilder::Build(const TArray<FVec3Type>& InVertices, TArray <FPlaneType>& OutPlanes, TArray<TArray<int32>>& OutFaceIndices, TArray<FVec3Type>& OutVertices, FAABB3Type& OutLocalBounds, EBuildMethod BuildMethod)
+ 	{
++#if UNREAL_4D_ENGINE_CHANGE
++		TRACE_CPUPROFILER_EVENT_SCOPE(FConvexBuilder::Build);
++#endif
++
+ 		OutPlanes.Reset();
+ 		OutVertices.Reset();
+ 		OutLocalBounds = FAABB3Type::EmptyAABB();
+@@ -284,3 +290,5 @@ namespace Chaos
+ 	}
+ 
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/Convex.cpp b/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/Convex.cpp
+index 1f11d05..94bb7ab 100644
+--- a/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/Convex.cpp
++++ b/Engine/Source/Runtime/Experimental/Chaos/Private/Chaos/Convex.cpp
+@@ -6,6 +6,8 @@
+ 
+ #define CHAOS_CONVEX_USE_FAST_RAYCAST 1
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ namespace Chaos
+ {
+ 	FImplicitObjectPtr FConvex::CopyGeometry() const
+@@ -327,6 +329,10 @@ namespace Chaos
+ 	DECLARE_CYCLE_STAT(TEXT("FConvex::CreateStructureData"), STAT_CreateConvexStructureData, STATGROUP_ChaosCollision);
+ 	void FConvex::CreateStructureData(TArray<TArray<int32>>&& PlaneVertexIndices, const bool bRegularDatas)
+ 	{
++#if UNREAL_4D_ENGINE_CHANGE
++		TRACE_CPUPROFILER_EVENT_SCOPE(FConvex::CreateStructureData);
++#endif
++
+ 		SCOPE_CYCLE_COUNTER(STAT_CreateConvexStructureData);
+ 		const bool bSuccess = StructureData.SetPlaneVertices(MoveTemp(PlaneVertexIndices), Vertices.Num(), bRegularDatas);
+ 		if (!bSuccess || !StructureData.IsValid())
+@@ -466,4 +472,6 @@ namespace Chaos
+ 		RotationOfMass = TransformToLocalSpace(InertiaTensor);
+ 		UnitMassInertiaTensor = InertiaTensor.GetDiagonal();
+ 	}
+-}
+\ No newline at end of file
++}
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/CollisionConvexMesh.h b/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/CollisionConvexMesh.h
+index 4efeeb5..68f6718 100644
+--- a/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/CollisionConvexMesh.h
++++ b/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/CollisionConvexMesh.h
+@@ -22,6 +22,8 @@
+ #define DEBUG_HULL_GENERATION_HULLSTEPS_TO_OBJ 0
+ #define DEBUG_HULL_GENERATION_BUILDHORIZON_TO_OBJ 0
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ namespace Chaos
+ {
+ 	// When encountering a triangle or quad in hull generation (3-points or 4 coplanar points) we will instead generate
+@@ -708,7 +710,11 @@ namespace Chaos
+ 			Stack.Push({ VtxIndex1, Vertices[VtxIndex1] - Vertices[VtxIndex0] });
+ 
+ 			int32 Step = 2; // we already processed the two first 
++#if UNREAL_4D_ENGINE_CHANGE
++			while (Step <= VtxCount && !Stack.IsEmpty()) // This crashes with `p.Chaos.Convex.UseTConvexHull3Builder=0` without checking if the stack is empty
++#else
+ 			while (Step <= VtxCount)
++#endif
+ 			{
+ 				const int32 NextIndex = (StartIndex + Step) % VtxCount;
+ 
+@@ -1361,3 +1367,4 @@ namespace Chaos
+ 	};
+ }
+ 
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/Convex.h b/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/Convex.h
+index 858af6e..7f0a23a 100644
+--- a/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/Convex.h
++++ b/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/Convex.h
+@@ -15,6 +15,8 @@
+ #include "UObject/UE5ReleaseStreamObjectVersion.h"
+ #include "UObject/FortniteMainBranchObjectVersion.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ namespace Chaos
+ {
+ 	//
+@@ -117,6 +119,10 @@ namespace Chaos
+ 		    : FImplicitObject(EImplicitObject::IsConvex | EImplicitObject::HasBoundingBox, ImplicitObjectType::Convex)
+ 			, CenterOfMass(FVec3Type(0.f))
+ 		{
++#if UNREAL_4D_ENGINE_CHANGE
++			TRACE_CPUPROFILER_EVENT_SCOPE(FConvex::FConvex);
++#endif
++
+ 			const int32 NumVertices = InVertices.Num();
+ 			if (NumVertices == 0)
+ 			{
+@@ -132,13 +138,18 @@ namespace Chaos
+ 
+ 			if (BuildMethod != FConvexBuilder::EBuildMethod::ConvexHull3Simplified)
+ 			{
++#if !UNREAL_4D_ENGINE_CHANGE
++				// This block doesn't appear to change anything for static
++				// colliders and is expensive to run, so Unreal 4D disables it.
++				TRACE_CPUPROFILER_EVENT_SCOPE(FConvex::MergeFacesAndColinearEdges);
+ 				// it appears that this code path can leave the convex in an undefined state.
+-				// @todo(chaos): Tolerances should be based on size, or passed 
++				// @todo(chaos): Tolerances should be based on size, or passed
+ 				const FRealType DistanceTolerance = 1.0f;
+ 				const FRealType AngleTolerance = 1.e-6f;
+ 				FConvexBuilder::MergeFaces(Planes, FaceIndices, Vertices, DistanceTolerance);
+ 				FConvexBuilder::MergeColinearEdges(Planes, FaceIndices, Vertices, AngleTolerance);
+ 				CHAOS_ENSURE(Planes.Num() == FaceIndices.Num());
++#endif
+ 			}
+ 
+ 			CreateStructureData(MoveTemp(FaceIndices));
+@@ -1125,3 +1136,5 @@ namespace Chaos
+ 		FRotation3 RotationOfMass;
+ 	};
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/InteractiveToolsFramework/Private/BaseGizmos/TransformProxy.cpp b/Engine/Source/Runtime/InteractiveToolsFramework/Private/BaseGizmos/TransformProxy.cpp
+index 3c18356..16296e1 100644
+--- a/Engine/Source/Runtime/InteractiveToolsFramework/Private/BaseGizmos/TransformProxy.cpp
++++ b/Engine/Source/Runtime/InteractiveToolsFramework/Private/BaseGizmos/TransformProxy.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include UE_INLINE_GENERATED_CPP_BY_NAME(TransformProxy)
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
+ 
+ #define LOCTEXT_NAMESPACE "UTransformProxy"
+ 
+@@ -12,7 +13,15 @@ DEFINE_LOG_CATEGORY_STATIC(LogInteractiveToolsTransformProxy, Log, All);
+ 
+ void UTransformProxy::AddComponent(USceneComponent* Component, bool bModifyComponentOnTransform)
+ {
++
++#if UNREAL_4D_ENGINE_CHANGE
++	if (!Component)
++	{
++		return;
++	}
++#else
+ 	check(Component);
++#endif
+ 
+ 	FRelativeObject& NewObj = Objects.Emplace_GetRef();
+ 	NewObj.Component = Component;
+@@ -41,7 +50,15 @@ void UTransformProxy::AddComponentCustom(
+ 	int64 UserDefinedIndex,
+ 	bool bModifyComponentOnTransform)
+ {
++
++#if UNREAL_4D_ENGINE_CHANGE
++	if (!Component)
++	{
++		return;
++	}
++#else
+ 	check(Component);
++#endif
+ 	if (!ensure(GetTransformFunc && SetTransformFunc))
+ 	{
+ 		return;
+@@ -335,3 +352,4 @@ FText FTransformProxyChangeSource::GetChangeDescription()
+ 
+ #undef LOCTEXT_NAMESPACE
+ 
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/InteractiveToolsFramework/Private/InteractiveGizmoManager.cpp b/Engine/Source/Runtime/InteractiveToolsFramework/Private/InteractiveGizmoManager.cpp
+index daf736e..3246546 100644
+--- a/Engine/Source/Runtime/InteractiveToolsFramework/Private/InteractiveGizmoManager.cpp
++++ b/Engine/Source/Runtime/InteractiveToolsFramework/Private/InteractiveGizmoManager.cpp
+@@ -17,6 +17,8 @@
+ 
+ #define LOCTEXT_NAMESPACE "UInteractiveGizmoManager"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ 
+ UInteractiveGizmoManager::UInteractiveGizmoManager()
+ {
+@@ -82,6 +84,12 @@ bool UInteractiveGizmoManager::DeregisterGizmoType(const FString& BuilderIdentif
+ }
+ 
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++bool UInteractiveGizmoManager::IsGizmoTypeRegistered(const FString& BuilderIdentifier) const
++{
++	return GizmoBuilders.Contains(BuilderIdentifier);
++}
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ 
+ UInteractiveGizmo* UInteractiveGizmoManager::CreateGizmo(const FString& BuilderIdentifier, const FString& InstanceIdentifier, void* Owner)
+@@ -359,6 +367,6 @@ UCombinedTransformGizmo* UInteractiveGizmoManager::CreateCustomRepositionableTra
+ 	return Cast<UCombinedTransformGizmo>(NewGizmo);
+ }
+ 
++#undef UNREAL_4D_ENGINE_CHANGE
+ 
+ #undef LOCTEXT_NAMESPACE
+-
+diff --git a/Engine/Source/Runtime/InteractiveToolsFramework/Public/InteractiveGizmoManager.h b/Engine/Source/Runtime/InteractiveToolsFramework/Public/InteractiveGizmoManager.h
+index a8b836b..1f18085 100644
+--- a/Engine/Source/Runtime/InteractiveToolsFramework/Public/InteractiveGizmoManager.h
++++ b/Engine/Source/Runtime/InteractiveToolsFramework/Public/InteractiveGizmoManager.h
+@@ -11,6 +11,8 @@
+ #include "ToolContextInterfaces.h"
+ #include "InteractiveGizmoManager.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ class FCombinedTransformGizmoActorFactory;
+ class UCombinedTransformGizmo;
+ class UCombinedTransformGizmoBuilder;
+@@ -67,10 +69,18 @@ public:
+ 	/**
+ 	 * Remove a GizmoBuilder from the set of known GizmoBuilders
+ 	 * @param BuilderIdentifier identification string that was passed to RegisterGizmoType()
+-	 * @return true if Builder was found and deregistered
++	 * @return true if Builder was found and deregistered, otherwise false and will log a warning
+ 	 */
+ 	INTERACTIVETOOLSFRAMEWORK_API virtual bool DeregisterGizmoType(const FString& BuilderIdentifier);
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++	/**
++	 * Check if a GizmoBuilder is registered or not by its identifier.
++	 * @param BuilderIdentifier identification string that was passed to RegisterGizmoType()
++	 * @return true if Builder is registered, otherwise false
++	 */
++	INTERACTIVETOOLSFRAMEWORK_API virtual bool IsGizmoTypeRegistered(const FString& BuilderIdentifier) const;
++#endif // UNREAL_4D_ENGINE_CHANGE
+ 
+ 
+ 	/**
+@@ -254,3 +264,5 @@ protected:
+ 	bool bDefaultGizmosRegistered = false;
+ 	TSharedPtr<FCombinedTransformGizmoActorFactory> GizmoActorBuilder;
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp b/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp
+index 035b3cb..9d2bc79 100644
+--- a/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp
++++ b/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp
+@@ -25,6 +25,8 @@
+ #include "VariableRateShadingImageManager.h"
+ #include "InstanceCulling/InstanceCullingContext.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ FRWLock FGraphicsMinimalPipelineStateId::PersistentIdTableLock;
+ FGraphicsMinimalPipelineStateId::PersistentTableType FGraphicsMinimalPipelineStateId::PersistentIdTable;
+ 
+@@ -1981,3 +1983,4 @@ void SetupGBufferRenderTargetInfo(const FSceneTexturesConfig& SceneTexturesConfi
+ 	}
+ }
+ 
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/Renderer/Private/StaticMeshes/StaticMeshSceneExtension.cpp b/Engine/Source/Runtime/Renderer/Private/StaticMeshes/StaticMeshSceneExtension.cpp
+index 91c2d85..b1c25a5 100644
+--- a/Engine/Source/Runtime/Renderer/Private/StaticMeshes/StaticMeshSceneExtension.cpp
++++ b/Engine/Source/Runtime/Renderer/Private/StaticMeshes/StaticMeshSceneExtension.cpp
+@@ -17,6 +17,8 @@
+ #include "SceneData/ParallelFor.h"
+ #include "IndirectLightingSceneExtension.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ int32 GDumpMeshDrawCommandMemoryStats = 0;
+ FAutoConsoleVariableRef CVarDumpMeshDrawCommandMemoryStats(
+ 	TEXT("r.MeshDrawCommands.LogMeshDrawCommandMemoryStats"),
+@@ -75,7 +77,16 @@ public:
+ 	virtual FMeshDrawCommand& AddCommand(FMeshDrawCommand& Initializer, uint32 NumElements) override final
+ 	{
+ 		checkf(CurrMeshPass < EMeshPass::Num, TEXT("BeginMeshPass() must be called before adding commands to this context"));
++#if UNREAL_4D_ENGINE_CHANGE
++		// Retained workaround for Unreal 4D's GPU tetra mesh rendering path.
++		// FTetraMesh4DComponentGPUSceneProxy::DrawStaticElements uses FTetraMesh4DVertexFactory,
++		// which supports cached mesh draw commands, which breaks this check.
++		// This check should be restored once the underlying bug is fixed.
++		//
++		// ensureMsgf(CommandInfo.StateBucketId == -1, TEXT("GetCommandInfoAndReset() wasn't called since the last command was added"));
++#else
+ 		ensureMsgf(CommandInfo.StateBucketId == -1, TEXT("GetCommandInfoAndReset() wasn't called since the last command was added"));
++#endif
+ 
+ 		if (NumElements == 1)
+ 		{
+@@ -1061,3 +1072,5 @@ void FStaticMeshSceneExtension::DumpMeshDrawCommandMemoryStats()
+ 	UE_LOGF(LogRenderer, Log, "PSO persistent Id table %.1fKb %d elements", FGraphicsMinimalPipelineStateId::GetPersistentIdTableSize() / 1024.0f, FGraphicsMinimalPipelineStateId::GetPersistentIdNum());
+ 	UE_LOGF(LogRenderer, Log, "PSO one frame Id %.1fKb", FGraphicsMinimalPipelineStateId::GetLocalPipelineIdTableSize() / 1024.0f);
+ }
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/TypedElementFramework/Public/Elements/Framework/TypedElementRegistry.h b/Engine/Source/Runtime/TypedElementFramework/Public/Elements/Framework/TypedElementRegistry.h
+index a2199ee..2a28a80 100644
+--- a/Engine/Source/Runtime/TypedElementFramework/Public/Elements/Framework/TypedElementRegistry.h
++++ b/Engine/Source/Runtime/TypedElementFramework/Public/Elements/Framework/TypedElementRegistry.h
+@@ -47,6 +47,8 @@
+ 
+ #include "TypedElementRegistry.generated.h"
+ 
++#define UNREAL_4D_ENGINE_CHANGE 1
++
+ /**
+  * Registry of element types and their associated interfaces, along with the elements that represent their instances.
+  */
+@@ -591,6 +593,13 @@ private:
+ 		{
+ 			FRegisteredElementType* RegisteredElementType = GetRegisteredElementTypeFromId(InElementHandle.GetId().GetTypeId());
+ 
++#if UNREAL_4D_ENGINE_CHANGE
++			if (!RegisteredElementType)
++			{
++				return; // Stale handle, return before the ensure below.
++			}
++#endif
++
+ 			ensureMsgf(RegisteredElementType, TEXT("Element type ID '%d' has not been registered!"), InElementHandle.GetId().GetTypeId());
+ 			if (!RegisteredElementType)
+ 			{
+@@ -684,3 +693,5 @@ private:
+ 	FOnElementUpdated OnElementUpdatedDelegate;
+ 	FSimpleMulticastDelegate OnProcessingDeferredElementsToDestroyDelegate;
+ };
++
++#undef UNREAL_4D_ENGINE_CHANGE
+diff --git a/Engine/Source/Runtime/WebBrowser/Private/CEF/CEFWebBrowserWindowRHIHelper.cpp b/Engine/Source/Runtime/WebBrowser/Private/CEF/CEFWebBrowserWindowRHIHelper.cpp
+index 4e1500a..e97f61c 100644
+--- a/Engine/Source/Runtime/WebBrowser/Private/CEF/CEFWebBrowserWindowRHIHelper.cpp
++++ b/Engine/Source/Runtime/WebBrowser/Private/CEF/CEFWebBrowserWindowRHIHelper.cpp
+@@ -62,7 +62,7 @@ static TComPtr<IDXGIAdapter> GetDXGIAdapterFromRHI()
+ 			return DXGIAdapter;
+ 		}
+ 	}
+-#endif
++#endif // WITH_ENGINE
+ 
+ 	return DXGIAdapter;
+ }
