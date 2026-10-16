@@ -34,7 +34,7 @@ function Resolve-EngineRoot
 
 	if ([string]::IsNullOrWhiteSpace($RequestedRoot))
 	{
-		$RequestedRoot = Join-Path $PSScriptRoot "..\..\..\UnrealEngine5"
+		$RequestedRoot = Join-Path $PSScriptRoot "..\..\..\UnrealEngine6"
 	}
 
 	if (-not (Test-Path -LiteralPath $RequestedRoot -PathType Container))

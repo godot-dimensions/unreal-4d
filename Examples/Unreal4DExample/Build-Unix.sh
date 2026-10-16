@@ -93,7 +93,7 @@ if [ -z "$engine_root" ]; then
     engine_root=${UNREAL_ENGINE_ROOT:-}
 fi
 if [ -z "$engine_root" ]; then
-    engine_root=$script_dir/../../../UnrealEngine5
+    engine_root=$script_dir/../../../UnrealEngine6
 fi
 [ -d "$engine_root" ] ||
     die "Unreal Engine was not found at '$engine_root'. Pass --engine-root or set UNREAL_ENGINE_ROOT."
