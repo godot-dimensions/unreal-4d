@@ -15,7 +15,6 @@ public class Unreal4DEditor : ModuleRules
 			"CoreUObject",
 			"EditorFramework",
 			"Engine",
-			"GizmoEdMode",
 			"InputCore",
 			"InteractiveToolsFramework",
 			"Kismet",

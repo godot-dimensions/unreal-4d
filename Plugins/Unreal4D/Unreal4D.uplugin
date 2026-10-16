@@ -33,11 +33,6 @@
 		{
 			"Name": "EnhancedInput",
 			"Enabled": true
-		},
-		{
-			"Name": "GizmoEdMode",
-			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
 		}
 	]
 }

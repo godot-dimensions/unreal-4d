@@ -10,7 +10,8 @@
 #include "GameFramework/Actor.h"
 #include "Settings/LevelEditorViewportSettings.h"
 
-TMap<FEditorModeTools*, FEditorViewportClient*> UEditorTransformGizmo4DFactory::GViewportClientsByModeTools;
+const FString UEditorTransformGizmo4DFactory::GizmoIdentifier = TEXT("TransformGizmo4D");
+TMap<FEditorModeTools*, TWeakPtr<FEditorViewportClient>> UEditorTransformGizmo4DFactory::GViewportClientsByModeTools;
 
 FEditorTransformGizmo4DPartVisibilitySettings UEditorTransformGizmo4DFactory::WidgetModeToVisibilitySettings(const UE::Widget::EWidgetMode InWidgetMode, const EEditorTransform4DKeepMode InKeepMode)
 {
@@ -54,7 +55,7 @@ FEditorTransformGizmo4DPartVisibilitySettings UEditorTransformGizmo4DFactory::Wi
 	return ret;
 }
 
-void UEditorTransformGizmo4DFactory::RegisterViewportClientForModeTools(FEditorModeTools* InModeTools, FEditorViewportClient* InViewportClient)
+void UEditorTransformGizmo4DFactory::RegisterViewportClientForModeTools(FEditorModeTools* InModeTools, TSharedPtr<FEditorViewportClient> InViewportClient)
 {
 	if (InModeTools == nullptr)
 	{
@@ -68,15 +69,15 @@ void UEditorTransformGizmo4DFactory::RegisterViewportClientForModeTools(FEditorM
 	GViewportClientsByModeTools.Add(InModeTools, InViewportClient);
 }
 
-FEditorViewportClient* UEditorTransformGizmo4DFactory::FindViewportClientForModeTools(FEditorModeTools* InModeTools)
+TSharedPtr<FEditorViewportClient> UEditorTransformGizmo4DFactory::FindViewportClientForModeTools(FEditorModeTools* InModeTools)
 {
 	if (InModeTools == nullptr)
 	{
 		return nullptr;
 	}
-	if (FEditorViewportClient** viewportClient = GViewportClientsByModeTools.Find(InModeTools))
+	if (TWeakPtr<FEditorViewportClient>* viewportClient = GViewportClientsByModeTools.Find(InModeTools))
 	{
-		return *viewportClient;
+		return viewportClient->Pin();
 	}
 	return nullptr;
 }
@@ -141,34 +142,30 @@ TArray<UInteractiveGizmo*> UEditorTransformGizmo4DFactory::BuildGizmoForSelectio
 	{
 		return retGizmos;
 	}
-	// Note: UGizmoEdMode::RecreateGizmo() may be called twice per selection change:
-	// once from ActorSelectionChangeNotify and once from OnWidgetModeChanged.
-	// This is harmless - the second call destroys and rebuilds the gizmo.
-	// Attempting to debounce here doesn't work because DestroyGizmo() is called
-	// before BuildGizmoForSelection, so skipping the build leaves no gizmo.
+	// The owning Unreal4D editor mode rebuilds this gizmo when selection or widget mode changes.
 	const ECoordSystem coordSystem = InModeTools->GetCoordSystem();
 	const UE::Widget::EWidgetMode widgetMode = InModeTools->GetWidgetMode();
 	const bool bPreserveNonUniformScale = GetDefault<ULevelEditorViewportSettings>()->PreserveNonUniformScale;
 	const EEditorTransform4DKeepMode keepMode = bPreserveNonUniformScale ? EEditorTransform4DKeepMode::ConformalChangesOnly : EEditorTransform4DKeepMode::Freeform;
 	// Ensure the gizmo builder is registered.
-	if (!InGizmoManager->IsGizmoTypeRegistered(TEXT("TransformGizmo4D")))
+	if (!InGizmoManager->IsGizmoTypeRegistered(GizmoIdentifier))
 	{
-		InGizmoManager->RegisterGizmoType(TEXT("TransformGizmo4D"), FUnreal4DEditorModule::TransformGizmo4DBuilder);
+		InGizmoManager->RegisterGizmoType(GizmoIdentifier, FUnreal4DEditorModule::TransformGizmo4DBuilder);
 	}
 	// Create a new 4D transform gizmo, a single gizmo for all selected objects.
 	// In order to fit into the lifecycle of Unreal's InteractiveToolsFramework,
 	// we need to use the gizmo manager's CreateGizmo to properly register it,
 	// and let it manage the gizmo's lifecycle, so the next time this factory
 	// is called the original object will be deleted and we need to create a new one.
-	UEditorTransformGizmo4D* gizmo4D = Cast<UEditorTransformGizmo4D>(InGizmoManager->CreateGizmo(TEXT("TransformGizmo4D")));
+	UEditorTransformGizmo4D* gizmo4D = Cast<UEditorTransformGizmo4D>(InGizmoManager->CreateGizmo(GizmoIdentifier, GizmoIdentifier));
 	if (gizmo4D == nullptr)
 	{
 		return retGizmos;
 	}
 	// Configure the gizmo.
 	const FEditorTransformGizmo4DPartVisibilitySettings visibilitySettings = WidgetModeToVisibilitySettings(widgetMode, keepMode);
-	FEditorViewportClient* viewportClient = FindViewportClientForModeTools(InModeTools);
-	gizmo4D->Setup4D(selected4DComponents, visibilitySettings, coordSystem, InModeTools, viewportClient);
+	const TSharedPtr<FEditorViewportClient> viewportClient = FindViewportClientForModeTools(InModeTools);
+	gizmo4D->Setup4D(selected4DComponents, visibilitySettings, coordSystem, InModeTools, viewportClient.Get());
 	retGizmos.Add(gizmo4D);
 	return retGizmos;
 }

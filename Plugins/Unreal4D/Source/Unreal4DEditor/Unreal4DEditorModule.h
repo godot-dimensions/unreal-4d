@@ -31,7 +31,6 @@ private:
 	UScene4DComponent* ResolveObjectTo4DComponent(UObject& InObject);
 	void Sync4DComponentFromEditorTransform(class UScene4DComponent* InComponent4D);
 
-	TSet<FEditorModeTools*> ModeToolsWithGizmoFactory;
 	FDelegateHandle LevelEditorCreatedHandle;
 	FDelegateHandle AssetEditorOpenedHandle;
 	FDelegateHandle BeginObjectMovementHandle;

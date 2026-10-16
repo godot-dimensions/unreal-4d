@@ -12,9 +12,10 @@ class UBlueprint;
 class IAssetEditorInstance;
 struct FTypedElementHandle;
 class FEditorModeTools;
+class FEditorViewportClient;
 
 // Bridges Blueprint SCS component selection to the SCS viewport's FEditorModeTools
-// so that UGizmoEdMode::RecreateGizmo() fires and our TransformGizmo4DFactory gets queried.
+// so that the Unreal4D editor mode updates its transform gizmo.
 //
 // The Blueprint editor's SCS viewport creates its own FAssetEditorModeManager with
 // private (empty) USelection sets and never calls ActorSelectionChangeNotify().
@@ -36,6 +37,7 @@ public:
 private:
 	// Track the current SCS context to handle reconstruction rebinding.
 	FEditorModeTools* _viewportModeTools = nullptr;
+	TWeakPtr<FEditorViewportClient> _viewportClient;
 	TArray<FString> _selectedComponentNames; // Store names, not pointers - pointers get destroyed during SCS reconstruction
 	FDelegateHandle _onObjectsReplacedHandle;
 

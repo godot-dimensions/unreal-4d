@@ -19,7 +19,6 @@
 // Gizmo mode integration.
 #include "Viewport/TransformGizmo/EditorTransformGizmo4DFactory.h"
 #include "Viewport/TransformGizmo/EditorTransformGizmo4D.h"
-#include "GizmoEdMode.h"
 #include "InteractiveGizmoManager.h"
 #include "LevelEditor.h"
 #include "Tools/EdModeInteractiveToolsContext.h"
@@ -163,7 +162,6 @@ void FUnreal4DEditorModule::ShutdownModule()
 		}
 	}
 	BlueprintSelectionNotifier.Unregister();
-	ModeToolsWithGizmoFactory.Empty();
 	if (SelectedActorsPtr.IsValid() && SelectionChangedHandle.IsValid())
 	{
 		SelectedActorsPtr->SelectionChangedEvent.Remove(SelectionChangedHandle);
@@ -193,30 +191,8 @@ void FUnreal4DEditorModule::SetupGizmoForModeTools(FEditorModeTools& InModeTools
 	{
 		InModeTools.ActivateMode(FBuiltinEditorModes::EM_Default);
 	}
-	// Activate GizmoEdMode after the default mode for custom 4D gizmo support.
-	const FEditorModeID GizmoModeID = GetDefault<UGizmoEdMode>()->GetID();
-	InModeTools.ActivateMode(GizmoModeID);
-	// Activate the 4D editor mode after the 4D gizmo mode so it can receive input events.
+	// The Unreal4D editor mode owns the gizmo for this editor context.
 	InModeTools.ActivateMode(FUnreal4DEditorMode::ModeID);
-	// Get the gizmo manager from the mode tools so we can register our gizmo builder and factory.
-	UEdMode* EdMode = InModeTools.GetActiveScriptableMode(GizmoModeID);
-	UGizmoEdMode* GizmoEdMode = Cast<UGizmoEdMode>(EdMode);
-	UInteractiveGizmoManager* GizmoManager = InModeTools.GetInteractiveToolsContext()->GizmoManager;
-	if (GizmoEdMode == nullptr || GizmoManager == nullptr)
-	{
-		return;
-	}
-	// If the mode and gizmo manager are valid, register the gizmo builder and factory.
-	if (!GizmoManager->IsGizmoTypeRegistered(TEXT("TransformGizmo4D")))
-	{
-		GizmoManager->RegisterGizmoType(TEXT("TransformGizmo4D"), TransformGizmo4DBuilder);
-	}
-	// Avoid re-adding the same factory repeatedly for the same mode tools instance.
-	if (!ModeToolsWithGizmoFactory.Contains(&InModeTools))
-	{
-		GizmoEdMode->AddFactory(TransformGizmo4DFactory);
-		ModeToolsWithGizmoFactory.Add(&InModeTools);
-	}
 }
 
 void FUnreal4DEditorModule::OnAssetEditorOpened(UObject* InAsset, IAssetEditorInstance* InEditorInstance)
@@ -278,11 +254,11 @@ void FUnreal4DEditorModule::OnLevelEditorCreated(TSharedPtr<ILevelEditor> InLeve
 			return;
 		}
 
-		FEditorModeID GizmoModeID = GetDefault<UGizmoEdMode>()->GetID();
+		const FEditorModeID GizmoModeID = FUnreal4DEditorMode::ModeID;
 		FEditorModeTools& ModeTools = GLevelEditorModeTools();
 		SetupGizmoForModeTools(ModeTools);
 		ViewportRotationWidgetManager.AttachToLevelEditor(LevelEditorWeakPtr.Pin().ToSharedRef());
-		// Re-activate GizmoEdMode if it gets deactivated.
+		// Re-activate the Unreal4D editor mode if it gets deactivated.
 		if (USelection* Selection = GEditor->GetSelectedActors())
 		{
 			SelectedActorsPtr = Selection;
@@ -299,8 +275,8 @@ void FUnreal4DEditorModule::OnLevelEditorCreated(TSharedPtr<ILevelEditor> InLeve
 				}
 				FEditorModeTools& ModeMgr = GLevelEditorModeTools();
 
-				// Check if GizmoEdMode is active.
-				UEdMode* CurrentMode = ModeMgr.GetActiveScriptableMode(GizmoModeID);
+				// Check if the Unreal4D editor mode is active.
+				const bool CurrentMode = ModeMgr.IsModeActive(GizmoModeID);
 				if (!CurrentMode)
 				{
 					// Defer activation to next tick.
@@ -309,14 +285,13 @@ void FUnreal4DEditorModule::OnLevelEditorCreated(TSharedPtr<ILevelEditor> InLeve
 						if (LevelEditorWeakPtr.IsValid())
 						{
 							FEditorModeTools& ModeMgr = GLevelEditorModeTools();
-							if (!ModeMgr.GetActiveScriptableMode(GizmoModeID))
+							if (!ModeMgr.IsModeActive(GizmoModeID))
 							{
 								if (!ModeMgr.IsModeActive(FBuiltinEditorModes::EM_Default))
 								{
 									ModeMgr.ActivateMode(FBuiltinEditorModes::EM_Default);
 								}
 								ModeMgr.ActivateMode(GizmoModeID);
-								ModeMgr.ActivateMode(FUnreal4DEditorMode::ModeID);
 							}
 						}
 					});

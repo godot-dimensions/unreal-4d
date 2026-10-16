@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Unreal4DEditorDefines.h"
+#include "Viewport/TransformGizmo/EditorTransformGizmo4DManager.h"
 
 #include "EdMode.h"
 #include "Elements/Framework/TypedElementHandle.h"
@@ -23,6 +24,7 @@ struct FEditorViewportCameraTransform4D
 class FUnreal4DEditorMode : public FEdMode
 {
 	static constexpr double WAxisMoveSpeed = 500.0;
+	FEditorTransformGizmo4DManager _transformGizmoManager;
 
 	// Purposefully typed with `FEditorViewportClient*` for `.Contains()` checks.
 	TSet<FEditorViewportClient*> _levelViewportClientsWithRegisteredSignals;
@@ -65,6 +67,7 @@ public:
 
 	// FEdMode interface.
 	virtual void Exit() override;
+	virtual void ActorSelectionChangeNotify() override;
 	virtual void Tick(FEditorViewportClient* InViewportClient, float InDeltaTime) override;
 	virtual bool InputKey(FEditorViewportClient* ViewportClient, FViewport* InViewport, FKey InKey, EInputEvent InEvent) override;
 	virtual bool InputAxis(FEditorViewportClient* InViewportClient, FViewport* InViewport, int32 InControllerId, FKey InKey, float InDelta, float InDeltaTime) override;

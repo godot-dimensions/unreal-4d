@@ -4,6 +4,7 @@
 #include "../Unreal4DCore/Scene/Components/Scene4DComponent.h"
 #include "Unreal4DEditorCommands.h"
 #include "Viewport/TransformGizmo/EditorTransformGizmo4D.h"
+#include "Viewport/TransformGizmo/EditorTransformGizmo4DFactory.h"
 #include "Viewport/TransformGizmo/EditorTransformProxy4D.h"
 
 // Globals.
@@ -87,6 +88,8 @@ FLinearColor FUnreal4DEditorMode::GetAxisColor(const EAxis4D InAxis) {
 
 void FUnreal4DEditorMode::Exit()
 {
+	_transformGizmoManager.Shutdown(*GetModeManager());
+	UEditorTransformGizmo4DFactory::RegisterViewportClientForModeTools(GetModeManager(), nullptr);
 	if (GEditor != nullptr)
 	{
 		// Only visit live viewport clients; a previously registered viewport may have been closed.
@@ -99,9 +102,16 @@ void FUnreal4DEditorMode::Exit()
 	FEdMode::Exit();
 }
 
+void FUnreal4DEditorMode::ActorSelectionChangeNotify()
+{
+	FEdMode::ActorSelectionChangeNotify();
+	_transformGizmoManager.InvalidateSelection();
+}
+
 void FUnreal4DEditorMode::Tick(FEditorViewportClient* InViewportClient, float InDeltaTime)
 {
 	FEdMode::Tick(InViewportClient, InDeltaTime);
+	_transformGizmoManager.Update(*GetModeManager());
 	// Register for drag-and-drop transform updates if not already registered.
 	// We need to check this on each editor mode tick because it is possible
 	// for viewport clients to be added or removed (ex: split viewports).

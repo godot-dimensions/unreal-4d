@@ -41,6 +41,7 @@ void FEditorBlueprintSelectionNotifier4D::Unregister()
 		FCoreUObjectDelegates::OnObjectsReplaced.Remove(_onObjectsReplacedHandle);
 	}
 	_viewportModeTools = nullptr;
+	_viewportClient.Reset();
 	_selectedComponentNames.Empty();
 }
 
@@ -60,7 +61,8 @@ void FEditorBlueprintSelectionNotifier4D::OnBlueprintSelectionUpdated(IAssetEdit
 	if (!viewportClient.IsValid()) { return; }
 	_viewportModeTools = viewportClient->GetModeTools();
 	if (_viewportModeTools == nullptr) { return; }
-	UEditorTransformGizmo4DFactory::RegisterViewportClientForModeTools(_viewportModeTools, viewportClient.Get());
+	_viewportClient = viewportClient;
+	UEditorTransformGizmo4DFactory::RegisterViewportClientForModeTools(_viewportModeTools, viewportClient);
 	// The SCS viewport auto-creates an FAssetEditorModeManager but never calls
 	// `SetPreviewScene()` on it, so when `AEditorGizmoActor4D` calls `GetWorld()`,
 	// it gets the main Level editor world instead of the Blueprint preview world.
@@ -109,11 +111,7 @@ void FEditorBlueprintSelectionNotifier4D::OnBlueprintSelectionUpdated(IAssetEdit
 	}
 	selectedComponents->EndBatchSelectOperation();
 	_viewportModeTools->ActorSelectionChangeNotify();
-	// Suppress the standard 3D FWidget on this viewport when 4D components are selected.
-	// UGizmoEdMode::Enter() calls SetShowWidget(false), but that only sets the ModeTools flag.
-	// FEditorViewportClient has its own bShowWidget used for deciding 3D gizmo visibility.
-	// We need to set BOTH so the Unreal 3D FWidget doesn't draw on top of the 4D gizmo.
-	bool bHas4DSelection = false;
+	// Widget visibility is owned by the editor mode alongside the 4D gizmo.
 	TArray<UActorComponent*> selectedActorComponents;
 	selectedComponents->GetSelectedObjects<UActorComponent>(selectedActorComponents);
 	for (UActorComponent* actorComp : selectedActorComponents)
@@ -123,22 +121,14 @@ void FEditorBlueprintSelectionNotifier4D::OnBlueprintSelectionUpdated(IAssetEdit
 		// We'll match these names against the replacement map when OnObjectsReplaced fires.
 		// In case this tracking is not desired, comment out only this line to disable it.
 		_selectedComponentNames.Add(actorComp->GetPathName());
-		// Check if the component is a 4D component.
-		UScene4DComponent* comp4D = Cast<UScene4DComponent>(actorComp);
-		if (comp4D != nullptr)
-		{
-			bHas4DSelection = true;
-		}
 	}
-	// Show the 3D widget whenever the 4D one is not being shown.
-	viewportClient->ShowWidget(!bHas4DSelection);
 }
 
 void FEditorBlueprintSelectionNotifier4D::OnObjectsReplaced(const TMap<UObject*, UObject*>& InReplacementMap)
 {
 	// This callback fires when SCS component instances are replaced during preview reconstruction.
 	// Match new components by name to rebind the gizmo to the new instances.
-	if (_viewportModeTools == nullptr)
+	if (_viewportModeTools == nullptr || !_viewportClient.IsValid())
 	{
 		return;
 	}
