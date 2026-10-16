@@ -16,6 +16,7 @@
 
 #include "/Engine/Private/VertexFactoryCommon.ush"
 #include "/Engine/Private/LocalVertexFactoryCommon.ush"
+#include "/Plugin/Unreal4D/VertexFactoryCompatibility.ush"
 #include "/Engine/Private/LightmapData.ush"
 
 // Manual vertex fetch is currently disabled.
@@ -718,12 +719,12 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(
 	SetTangents(Interpolants, Intermediates.TangentToWorld[0], Intermediates.TangentToWorld[2], Intermediates.TangentToWorldSign);
 	SetColor(Interpolants, Intermediates.Color);
 
-	SetPrimitiveId(Interpolants, Intermediates.Common.SceneData.PrimitiveId);
+	SetSceneData(Interpolants, Intermediates.Common.SceneData);
 
-	#if HAS_INSTANCE_LOCAL_TO_WORLD_PS
+	#if LOCAL_VF_INTERPOLATE_INSTANCE_TRANSFORMS && HAS_INSTANCE_LOCAL_TO_WORLD_PS
 	SetInstanceLocalToWorld(Interpolants, VertexParameters.InstanceLocalToWorld);
 	#endif
-	#if HAS_INSTANCE_WORLD_TO_LOCAL_PS
+	#if LOCAL_VF_INTERPOLATE_INSTANCE_TRANSFORMS && HAS_INSTANCE_WORLD_TO_LOCAL_PS
 	SetInstanceWorldToLocal(Interpolants, VertexParameters.InstanceWorldToLocal);
 	#endif
 
@@ -863,26 +864,26 @@ FVertexFactoryRayTracingInterpolants VertexFactoryInterpolate(FVertexFactoryRayT
 	FVertexFactoryRayTracingInterpolants O = (FVertexFactoryRayTracingInterpolants)0;
 
 #if VF_USE_PRIMITIVE_SCENE_DATA
-	O.InterpolantsVSToPS.PrimitiveId = a.InterpolantsVSToPS.PrimitiveId;
+	Unreal4DCopySceneDataId(O.InterpolantsVSToPS, a.InterpolantsVSToPS);
 #if NEEDS_LIGHTMAP_COORDINATE
 	O.InterpolantsVSToPS.LightmapDataIndex = a.InterpolantsVSToPS.LightmapDataIndex;
 #endif
 #endif
 
-#if USES_PER_INSTANCE_CUSTOM_DATA && VF_USE_PRIMITIVE_SCENE_DATA
+#if LOCAL_VF_INTERPOLATE_CUSTOM_DATA_OFFSET
 	O.InterpolantsVSToPS.CustomDataOffset = a.InterpolantsVSToPS.CustomDataOffset;
 	O.InterpolantsVSToPS.CustomDataCount  = a.InterpolantsVSToPS.CustomDataCount;
 #endif
 
-#if NEEDS_PER_INSTANCE_RANDOM_PS
+#if LOCAL_VF_INTERPOLATE_PER_INSTANCE_RANDOM
 	O.InterpolantsVSToPS.PerInstanceRandom = a.InterpolantsVSToPS.PerInstanceRandom;
 #endif
 
-#if HAS_INSTANCE_LOCAL_TO_WORLD_PS
+#if LOCAL_VF_INTERPOLATE_INSTANCE_TRANSFORMS && HAS_INSTANCE_LOCAL_TO_WORLD_PS
 	O.InterpolantsVSToPS.InstanceLocalToWorld = a.InterpolantsVSToPS.InstanceLocalToWorld;
 #endif
 
-#if HAS_INSTANCE_WORLD_TO_LOCAL_PS
+#if LOCAL_VF_INTERPOLATE_INSTANCE_TRANSFORMS && HAS_INSTANCE_WORLD_TO_LOCAL_PS
 	O.InterpolantsVSToPS.InstanceWorldToLocal = a.InterpolantsVSToPS.InstanceWorldToLocal;
 #endif
 

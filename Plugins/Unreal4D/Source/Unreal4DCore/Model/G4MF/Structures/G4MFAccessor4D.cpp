@@ -436,7 +436,7 @@ TArray<FLinearColor> UG4MFAccessor4D::DecodeColorsFromBytes(const UG4MFState4D* 
 	}
 	else
 	{
-		UE_LOG(LogUnreal4DCore, Warning, TEXT("G4MFAccessor4D: Cannot decode colors from accessor with vector size %lld. Returning an empty array."), _vectorSize);
+		UE_LOG(LogUnreal4DCore, Warning, TEXT("G4MFAccessor4D: Cannot decode colors from accessor with vector size %d. Returning an empty array."), _vectorSize);
 	}
 	return colors;
 }

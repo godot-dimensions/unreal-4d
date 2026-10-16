@@ -2,6 +2,7 @@
 
 #include "MaterialDomain.h"
 #include "Materials/Material.h"
+#include "Misc/EngineVersionComparison.h"
 #include "SceneManagement.h"
 #include "SceneInterface.h"
 
@@ -68,8 +69,13 @@ FPrimitiveViewRelevance FTetraMesh4DProjectionComponentSceneProxy::GetViewReleva
 
 	Result.bDrawRelevance = IsShown(View);
 	Result.bShadowRelevance = false;
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
 	Result.bStaticRelevance = true;
 	Result.bDynamicRelevance = false;
+#else
+	Result.bStaticRelevance = false;
+	Result.bDynamicRelevance = true;
+#endif
 	Result.bRenderInMainPass = ShouldRenderInMainPass();
 	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
@@ -80,13 +86,12 @@ FPrimitiveViewRelevance FTetraMesh4DProjectionComponentSceneProxy::GetViewReleva
 	return Result;
 }
 
-void FTetraMesh4DProjectionComponentSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
+void FTetraMesh4DProjectionComponentSceneProxy::BuildMeshBatch(FMeshBatch& Mesh) const
 {
 	check(VertexFactory.IsInitialized());
 	check(RenderResource.IsValid());
 	check(RenderResource->IsProjectionInitialized());
 
-	FMeshBatch Mesh;
 	FMeshBatchElement& BatchElement = Mesh.Elements[0];
 
 	Mesh.VertexFactory = &VertexFactory;
@@ -112,7 +117,9 @@ void FTetraMesh4DProjectionComponentSceneProxy::DrawStaticElements(FStaticPrimit
 	BatchElement.bForceInstanceCulling = false;
 	BatchElement.bFetchInstanceCountFromScene = false;
 	BatchElement.bIsInstanceRuns = false;
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
 	BatchElement.bIsSplineProxy = false;
+#endif
 	BatchElement.bPreserveInstanceOrder = false;
 	BatchElement.bUserDataIsColorVertexBuffer = false;
 	BatchElement.FirstIndex = 0;
@@ -120,6 +127,33 @@ void FTetraMesh4DProjectionComponentSceneProxy::DrawStaticElements(FStaticPrimit
 	BatchElement.MinVertexIndex = 0;
 	BatchElement.MaxVertexIndex = NumProjectionVertices > 0 ? NumProjectionVertices - 1 : 0;
 	BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
+}
 
+void FTetraMesh4DProjectionComponentSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
+{
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
+	FMeshBatch Mesh;
+	BuildMeshBatch(Mesh);
 	PDI->DrawMesh(Mesh, 0.0f);
+#endif
+}
+
+void FTetraMesh4DProjectionComponentSceneProxy::GetDynamicMeshElements(
+	const TArray<const FSceneView*>& Views,
+	const FSceneViewFamily& ViewFamily,
+	uint32 VisibilityMap,
+	FMeshElementCollector& Collector) const
+{
+#if !UE_VERSION_OLDER_THAN(5, 8, 0)
+	// Use the same UE 5.8 submission workaround as the sliced mesh proxy.
+	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+	{
+		if (VisibilityMap & (1 << ViewIndex))
+		{
+			FMeshBatch& Mesh = Collector.AllocateMesh();
+			BuildMeshBatch(Mesh);
+			Collector.AddMesh(ViewIndex, Mesh);
+		}
+	}
+#endif
 }

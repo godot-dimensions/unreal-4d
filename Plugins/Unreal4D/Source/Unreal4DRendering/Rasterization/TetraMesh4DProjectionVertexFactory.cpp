@@ -1,6 +1,7 @@
 #include "TetraMesh4DProjectionVertexFactory.h"
 
 #include "MaterialDomain.h"
+#include "Misc/EngineVersionComparison.h"
 
 void FTetraMesh4DProjectionVertexFactoryShaderParameters::Bind(const FShaderParameterMap& ParameterMap)
 {
@@ -81,8 +82,15 @@ FRHIUniformBuffer* FTetraMesh4DProjectionVertexFactory::GetMeshUniformBuffer() c
 IMPLEMENT_TYPE_LAYOUT(FTetraMesh4DProjectionVertexFactoryShaderParameters);
 IMPLEMENT_VERTEX_FACTORY_PARAMETER_TYPE(FTetraMesh4DProjectionVertexFactory, SF_Vertex, FTetraMesh4DProjectionVertexFactoryShaderParameters);
 
+#if UE_VERSION_OLDER_THAN(5, 9, 0)
+static constexpr EVertexFactoryFlags TetraMesh4DProjectionPrimitiveIdFlags = EVertexFactoryFlags::SupportsPrimitiveIdStream;
+#else
+// UE 5.9 requires a primitive-ID stream for GPUScene support; this factory uses primitive uniform buffers.
+static constexpr EVertexFactoryFlags TetraMesh4DProjectionPrimitiveIdFlags = EVertexFactoryFlags::None;
+#endif
+
 IMPLEMENT_VERTEX_FACTORY_TYPE(
 	FTetraMesh4DProjectionVertexFactory,
 	"/Plugin/Unreal4D/TetraMesh4DProjectionVertexFactory.ush",
-	EVertexFactoryFlags::UsedWithMaterials | EVertexFactoryFlags::SupportsPrimitiveIdStream
+	EVertexFactoryFlags::UsedWithMaterials | TetraMesh4DProjectionPrimitiveIdFlags
 );

@@ -276,7 +276,7 @@ UG4MFModelAsset4D* UG4MFModelAsset4DFactory::ImportG4MFFile(
 			UMesh4D* tempCombinedMesh = g4mfDocument->ImportGenerateSingleMesh(g4mfState, GetTransientPackage(), RF_Transient, -1, bIncludeInvisible);
 			if (tempCombinedMesh == nullptr)
 			{
-				UE_LOG(LogUnreal4DEditor, Error, TEXT("G4MF import: Failed to generate temporary combined mesh during asset update. Aborting file import."), *combinedMeshAssetName);
+				UE_LOG(LogUnreal4DEditor, Error, TEXT("G4MF import: Failed to generate temporary combined mesh for asset '%s' during asset update. Aborting file import."), *combinedMeshAssetName);
 				return nullptr;
 			}
 			existingCombinedArrayTetraMesh->OverwriteFromOtherMesh(tempCombinedMesh);

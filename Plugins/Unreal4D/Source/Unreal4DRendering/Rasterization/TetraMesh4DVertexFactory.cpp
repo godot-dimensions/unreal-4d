@@ -1,6 +1,7 @@
 #include "TetraMesh4DVertexFactory.h"
 
 #include "MaterialDomain.h"
+#include "Misc/EngineVersionComparison.h"
 
 FTetraMesh4DUniformRenderResource::FTetraMesh4DUniformRenderResource()
 {
@@ -157,6 +158,13 @@ FRHIUniformBuffer* FTetraMesh4DVertexFactory::GetMeshUniformBuffer() const
 IMPLEMENT_TYPE_LAYOUT(FTetraMesh4DVertexFactoryShaderParameters);
 IMPLEMENT_VERTEX_FACTORY_PARAMETER_TYPE(FTetraMesh4DVertexFactory, SF_Vertex, FTetraMesh4DVertexFactoryShaderParameters);
 
+#if UE_VERSION_OLDER_THAN(5, 9, 0)
+static constexpr EVertexFactoryFlags TetraMesh4DPrimitiveIdFlags = EVertexFactoryFlags::SupportsPrimitiveIdStream;
+#else
+// UE 5.9 requires a primitive-ID stream for GPUScene support; this factory uses primitive uniform buffers.
+static constexpr EVertexFactoryFlags TetraMesh4DPrimitiveIdFlags = EVertexFactoryFlags::None;
+#endif
+
 /*
  * Registers the vertex factory type and associates it with its TetraMesh4DVertexFactory.ush implementation.
  */
@@ -167,7 +175,7 @@ IMPLEMENT_VERTEX_FACTORY_TYPE(
 	| EVertexFactoryFlags::SupportsStaticLighting
 	| EVertexFactoryFlags::SupportsDynamicLighting
 	| EVertexFactoryFlags::SupportsCachingMeshDrawCommands
-	| EVertexFactoryFlags::SupportsPrimitiveIdStream
+	| TetraMesh4DPrimitiveIdFlags
 	| EVertexFactoryFlags::SupportsTriangleSorting
 	| EVertexFactoryFlags::SupportsPositionOnly
 );

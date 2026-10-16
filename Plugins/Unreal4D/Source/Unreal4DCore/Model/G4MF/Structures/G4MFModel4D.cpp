@@ -242,7 +242,7 @@ bool UG4MFModel4D::ExportSerializeFileData(UG4MFState4D* InG4MFState, const bool
 		if (targetUri.IsEmpty())
 		{
 			int64 indexOfSelf = InG4MFState->G4MFFiles.IndexOfByKey(this);
-			targetUri = FString::Printf(TEXT("Model%d"), indexOfSelf);
+			targetUri = FString::Printf(TEXT("Model%" INT64_FMT), indexOfSelf);
 		}
 	}
 	if (!targetUri.EndsWith(targetExtension))

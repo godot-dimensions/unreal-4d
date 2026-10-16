@@ -10,10 +10,12 @@ public class Unreal4DEditor : ModuleRules
 		{
 			"AssetRegistry",
 			"AssetTools",
+			"BlueprintGraph",
 			"Chaos",
 			"Core",
 			"CoreUObject",
 			"EditorFramework",
+			"EditorStyle",
 			"Engine",
 			"InputCore",
 			"InteractiveToolsFramework",
@@ -26,6 +28,9 @@ public class Unreal4DEditor : ModuleRules
 			"Unreal4DCore",
 			"UnrealEd",
 		});
+#if UE_6_0_OR_LATER
+		PrivateDependencyModuleNames.Add("EditorViewport");
+#endif
 		// Access Kismet private headers for SSCSEditorViewport (needed for Blueprint gizmo integration).
 		PrivateIncludePaths.Add(System.IO.Path.Combine(EngineDirectory, "Source", "Editor", "Kismet", "Private"));
 	}

@@ -47,7 +47,7 @@ void UTetraMesh4D::PopulateInverseMetricCache()
 		{
 			newInverseMetricCache.Reset();
 			_NearestTetraInverseMetricCache.Reset();
-			UE_LOG(LogUnreal4DCore, Error, TEXT("UTetraMesh4D: Closest-point cache build failed because tetrahedron %d is degenerate or non-finite."), simplexTetIndex);
+			UE_LOG(LogUnreal4DCore, Error, TEXT("UTetraMesh4D: Closest-point cache build failed because tetrahedron %" INT64_FMT " is degenerate or non-finite."), simplexTetIndex);
 			return;
 		}
 		for (int64 gramIndex = 0; gramIndex < 6; gramIndex++)

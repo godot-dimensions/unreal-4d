@@ -224,6 +224,18 @@ if (-not (Test-Path -LiteralPath $BuildTool -PathType Leaf))
 
 $TargetName = if ($Target -eq "Editor") { "Unreal4DExampleEditor" } else { "Unreal4DExample" }
 
+if ($Target -eq "Editor")
+{
+	# This separate program must match the engine's shader protocol after switching branches.
+	Invoke-Checked $BuildTool @(
+		"ShaderCompileWorker",
+		"Win64",
+		"Development",
+		"-WaitMutex",
+		"-NoXGE"
+	)
+}
+
 Invoke-Checked $BuildTool @(
 	$TargetName,
 	"Win64",

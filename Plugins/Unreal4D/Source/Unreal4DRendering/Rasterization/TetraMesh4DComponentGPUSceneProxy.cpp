@@ -3,6 +3,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "MaterialDomain.h"
 #include "Materials/Material.h"
+#include "Misc/EngineVersionComparison.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "SceneManagement.h"
 #include "SceneInterface.h"
@@ -104,49 +105,42 @@ void FTetraMesh4DComponentGPUSceneProxy::GetDynamicMeshElements(
 
 #endif //~ WITH_EDITOR
 
-	//------------------------------------------------------------------------------
-	// NOTE:
-	// Dynamic mesh submission is temporarily disabled.
-	//
-	// This function is currently used only for debug rendering. The actual
-	// 4D mesh is rendered through the static draw path (DrawStaticElements).
-	//
-	// Dynamic mesh path is kept here for future use but is not used at the moment
-	// to avoid duplicate submissions and rendering issues.
-	//------------------------------------------------------------------------------
+	// UE 5.8 does not render this vertex factory through static mesh submission.
+	// Build the mesh batch per view there; UE 5.7 retains the static draw path.
+#if !UE_VERSION_OLDER_THAN(5, 8, 0)
+	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+	{
+		if (!(VisibilityMap & (1 << ViewIndex)))
+		{
+			continue;
+		}
 
-	//for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
-	//{
-	//	if (!(VisibilityMap & (1 << ViewIndex)))
-	//	{
-	//		continue;
-	//	}
+		FMeshBatch& Mesh = Collector.AllocateMesh();
+		FMeshBatchElement& BatchElement = Mesh.Elements[0];
 
-	//	FMeshBatch& Mesh = Collector.AllocateMesh();
-	//	FMeshBatchElement& BatchElement = Mesh.Elements[0];
+		Mesh.VertexFactory = &VertexFactory;
+		Mesh.MaterialRenderProxy = MaterialProxy;
+		Mesh.ReverseCulling = false;
+		Mesh.Type = PT_TriangleList;
+		Mesh.DepthPriorityGroup = SDPG_World;
+		Mesh.bCanApplyViewModeOverrides = true;
+		Mesh.LCI = nullptr;
+		Mesh.CastShadow = true;
+		Mesh.bUseForMaterial = true;
+		Mesh.bUseForDepthPass = true;
+		Mesh.bUseAsOccluder = false;
 
-	//	Mesh.VertexFactory = &VertexFactory;
-	//	Mesh.MaterialRenderProxy = MaterialProxy;
-	//	Mesh.ReverseCulling = false;
-	//	Mesh.Type = PT_TriangleList;
-	//	Mesh.DepthPriorityGroup = SDPG_World;
-	//	Mesh.bCanApplyViewModeOverrides = true;
-	//	Mesh.LCI = nullptr;
-	//	Mesh.CastShadow = true;
-	//	Mesh.bUseForMaterial = true;
-	//	Mesh.bUseForDepthPass = true;
-	//	Mesh.bUseAsOccluder = false;
+		BatchElement.IndexBuffer = &RenderResource->GetIndexBuffer();
+		BatchElement.FirstIndex = 0;
+		BatchElement.NumPrimitives = RenderResource->GetNumPrimitives();
+		BatchElement.MinVertexIndex = 0;
+		BatchElement.MaxVertexIndex = RenderResource->GetNumVertices() > 0 ? RenderResource->GetNumVertices() - 1 : 0;
+		BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
+		BatchElement.PrimitiveIdMode = PrimID_FromPrimitiveSceneInfo;
 
-	//	BatchElement.IndexBuffer = &RenderResource->GetIndexBuffer();
-	//	BatchElement.FirstIndex = 0;
-	//	BatchElement.NumPrimitives = RenderResource->GetNumPrimitives();
-	//	BatchElement.MinVertexIndex = 0;
-	//	BatchElement.MaxVertexIndex = RenderResource->GetNumVertices() > 0 ? RenderResource->GetNumVertices() - 1 : 0;
-	//	BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
-	//	BatchElement.PrimitiveIdMode = PrimID_FromPrimitiveSceneInfo;
-
-	//	Collector.AddMesh(ViewIndex, Mesh);
-	//}
+		Collector.AddMesh(ViewIndex, Mesh);
+	}
+#endif
 }
 
 FTetraMesh4DComponentGPUSceneProxy::~FTetraMesh4DComponentGPUSceneProxy()
@@ -169,10 +163,14 @@ FPrimitiveViewRelevance FTetraMesh4DComponentGPUSceneProxy::GetViewRelevance(con
 	Result.bDrawRelevance = IsShown(View);
 	Result.bShadowRelevance = IsShadowCast(View);
 
-	// only static relevance is enabled for now.
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
 	Result.bStaticRelevance = true;
 	Result.bDynamicRelevance = (View->Family->EngineShowFlags.Collision && BodySetup)
 							|| View->Family->EngineShowFlags.Bounds;
+#else
+	Result.bStaticRelevance = false;
+	Result.bDynamicRelevance = true;
+#endif
 
 	Result.bRenderInMainPass = ShouldRenderInMainPass();
 	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
@@ -193,6 +191,7 @@ FPrimitiveViewRelevance FTetraMesh4DComponentGPUSceneProxy::GetViewRelevance(con
  */
 void FTetraMesh4DComponentGPUSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 {
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
 	check(VertexFactory.IsInitialized());
 	check(RenderResource != nullptr);
 	check(RenderResource->GetVertexBuffer().IsInitialized());
@@ -230,4 +229,5 @@ void FTetraMesh4DComponentGPUSceneProxy::DrawStaticElements(FStaticPrimitiveDraw
 	BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
 
 	PDI->DrawMesh(Mesh, 0.0f);
+#endif
 }

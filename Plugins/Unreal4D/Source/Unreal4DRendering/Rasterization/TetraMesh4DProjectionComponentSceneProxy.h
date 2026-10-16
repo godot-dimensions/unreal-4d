@@ -30,6 +30,7 @@ public:
 
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
 	virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override;
+	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
 
 	virtual uint32 GetMemoryFootprint() const override
 	{
@@ -43,6 +44,8 @@ public:
 	}
 
 private:
+	void BuildMeshBatch(FMeshBatch& Mesh) const;
+
 	FTetraMesh4DProjectionVertexFactory VertexFactory;
 	FCamera4DRenderStatePtr CameraRenderState;
 	FTetraMesh4DRenderStatePtr MeshRenderState;

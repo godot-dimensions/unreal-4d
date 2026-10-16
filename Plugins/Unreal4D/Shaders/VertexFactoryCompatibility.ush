@@ -1,0 +1,30 @@
+#ifndef UNREAL4D_VERTEX_FACTORY_COMPATIBILITY
+#define UNREAL4D_VERTEX_FACTORY_COMPATIBILITY
+
+// UE 5.8 introduced these interpolation flags and replaced SetPrimitiveId with SetSceneData.
+#ifndef LOCAL_VF_INTERPOLATE_INSTANCE_TRANSFORMS
+#define UNREAL4D_LEGACY_PRIMITIVE_INTERPOLANT 1
+#define LOCAL_VF_INTERPOLATE_INSTANCE_TRANSFORMS 1
+#define LOCAL_VF_INTERPOLATE_PER_INSTANCE_RANDOM NEEDS_PER_INSTANCE_RANDOM_PS
+#define LOCAL_VF_INTERPOLATE_CUSTOM_DATA_OFFSET (USES_PER_INSTANCE_CUSTOM_DATA && VF_USE_PRIMITIVE_SCENE_DATA)
+
+void SetSceneData(inout FVertexFactoryInterpolantsVSToPS Interpolants, FSceneDataIntermediates SceneData)
+{
+	SetPrimitiveId(Interpolants, SceneData.PrimitiveId);
+}
+#else
+#define UNREAL4D_LEGACY_PRIMITIVE_INTERPOLANT 0
+#endif
+
+void Unreal4DCopySceneDataId(inout FVertexFactoryInterpolantsVSToPS Destination, FVertexFactoryInterpolantsVSToPS Source)
+{
+#if VF_USE_PRIMITIVE_SCENE_DATA
+#if UNREAL4D_LEGACY_PRIMITIVE_INTERPOLANT
+	Destination.PrimitiveId = Source.PrimitiveId;
+#else
+	Destination.InstanceId = Source.InstanceId;
+#endif
+#endif
+}
+
+#endif

@@ -35,7 +35,7 @@ UG4MFModelInstance4D* UG4MFModelInstance4D::FromJson(UG4MFState4D* InG4MFState, 
 		TSharedPtr<FJsonObject> nodeAdditionalChildrenJson = InJson->GetObjectField(TEXT("nodeAdditionalChildren"));
 		for (const auto& pair : nodeAdditionalChildrenJson->Values)
 		{
-			const FString& nodeName = pair.Key;
+			const FString nodeName(pair.Key.Len(), *pair.Key);
 			const TArray<TSharedPtr<FJsonValue>>& childrenJsonArray = pair.Value->AsArray();
 			FInt32Array4D childrenIndices;
 			for (const TSharedPtr<FJsonValue>& childJsonValue : childrenJsonArray)
@@ -50,7 +50,7 @@ UG4MFModelInstance4D* UG4MFModelInstance4D::FromJson(UG4MFState4D* InG4MFState, 
 		TSharedPtr<FJsonObject> nodeOverridesJson = InJson->GetObjectField(TEXT("nodeOverrides"));
 		for (const auto& pair : nodeOverridesJson->Values)
 		{
-			const FString& nodeName = pair.Key;
+			const FString nodeName(pair.Key.Len(), *pair.Key);
 			const TSharedPtr<FJsonObject>& overrideJsonObject = pair.Value->AsObject();
 			ret->NodeOverrides.Add(nodeName, overrideJsonObject);
 		}
