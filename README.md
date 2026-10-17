@@ -2,6 +2,8 @@
 
 Unreal 4D adds four-dimensional math, components, physics, rendering, and editor tooling to Unreal Engine for making 4D games.
 
+![Unreal 4D Model Showcase](Examples/unreal4d_model_showcase_anim.webp)
+
 ## Origins
 
 Unreal 4D is developed by Input Output Group (IOG): https://www.iog.io/
